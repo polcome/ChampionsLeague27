@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mundial 2026 — Fantasy League</title>
+<title>Champions League 26/27 — Fantasy League</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -620,7 +620,7 @@ let _cartesLog = []; // registre públic de cartes usades
 const ADMIN_PASS_HASH = 'a8c9b8f3e2e9c9a1c3b2d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5';
 
 // Contrasenya real (en text, per simplicitat entre amics — pots usar el hash si vols més seguretat)
-const ADMIN_PASSWORD = 'mundial2026admin';
+const ADMIN_PASSWORD = 'champions2627admin';
 // ============================================================
 
 const PHASES = ['lliga','playoff','r16','qf','sf','final'];
@@ -3616,8 +3616,6 @@ function renderAdminPanel() {
     </div>
   </div>
 
-
-
   <div style="display:flex;gap:0.8rem;flex-wrap:wrap;margin-bottom:2rem">
     <button class="btn-gold" onclick="reloadData()">🔄 Recarregar dades del Sheet</button>
     <a href="https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit" target="_blank" class="btn-primary" style="text-decoration:none;display:inline-flex;align-items:center">📊 Obrir Google Sheet</a>
@@ -3627,35 +3625,39 @@ function renderAdminPanel() {
     <div class="admin-card">
       <h3>📋 Estructura del Google Sheet</h3>
       <p style="font-size:0.82rem;color:var(--silver);line-height:1.6">
-        El Sheet necessita <strong style="color:var(--gold)">4 pestanyes</strong> amb exactament aquests noms:<br><br>
-        <strong>Participants</strong><br>
-        <code style="font-size:0.75rem;background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px">Nom</code><br><br>
+        El Sheet necessita <strong style="color:var(--gold)">7 pestanyes</strong> amb exactament aquests noms:<br><br>
+        <strong>Participants</strong> — <code style="font-size:0.75rem;background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px">Nom | Logo</code><br><br>
         <strong>Jugadors</strong><br>
-        <code style="font-size:0.75rem;background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px">Participant | Jugador | Equip | Posicio | Rol</code><br>
-        <span style="font-size:0.72rem;opacity:0.75">+ columnes opcionals <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">Rol_grups_j1, Rol_grups_j2, Rol_grups_j3, Rol_r16_e1, Rol_r8_e1, Rol_qf_e1, Rol_sf_e1, Rol_final_e1</code> — només cal omplir la cel·la de la jornada en què canvia el rol d'un jugador; si la deixes buida, es manté el rol de la jornada anterior (i si totes estan buides, s'usa la columna "Rol" base).</span><br><br>
+        <code style="font-size:0.75rem;background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px">Participant | Jugador | Equip | Posicio | Foto | Es_Original | Eliminat | Rol_lliga_j1 … Rol_final_f</code><br>
+        <span style="font-size:0.72rem;opacity:0.75">+ columnes de rol per cada jornada. <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">Es_Original=SI</code> per als jugadors del draft inicial. Si la cel·la de rol és buida, s'hereta el rol de la jornada anterior.</span><br><br>
         <strong>Puntuacions</strong><br>
-        <code style="font-size:0.75rem;background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px">Participant | Jugador | Fase | Jornada | Nota | Gols | Assistencies</code><br><br>
+        <code style="font-size:0.75rem;background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px">Participant | Jugador | Fase | Jornada | Nota | Gols | Assistencies | Penalti | DobleGroga | Vermella</code><br><br>
         <strong>Canvis</strong><br>
-        <code style="font-size:0.75rem;background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px">Participant | Fase | Jornada | Jugador_Surt | Jugador_Entra | Data</code>
+        <code style="font-size:0.75rem;background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px">Participant | Fase | Jornada | Jugador_Surt | Jugador_Entra | Data</code><br><br>
+        <strong>Capitans</strong> — <code style="font-size:0.75rem;background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px">Participant | Fase | Jornada | Capita</code><br><br>
+        <strong>Cartes_Jornada</strong> — <code style="font-size:0.75rem;background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px">Participant | Fase | Jornada | Carta | Carta_Estat | Carta_Detall</code><br><br>
+        <strong>11_Ideals</strong> — <code style="font-size:0.75rem;background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px">Fase | Jornada | Jugador | Puntuació | Rol_11ideal</code>
       </p>
     </div>
     <div class="admin-card">
       <h3>⚡ Valors vàlids</h3>
       <p style="font-size:0.82rem;color:var(--silver);line-height:1.7">
-        <strong style="color:var(--gold)">Fase:</strong> grups / r16 / r8 / qf / sf / final<br>
-        <strong style="color:var(--gold)">Jornada (grups):</strong> J1 / J2 / J3<br>
-        <strong style="color:var(--gold)">Jornada (elim.):</strong> E1<br>
+        <strong style="color:var(--gold)">Fase:</strong> lliga / playoff / r16 / qf / sf / final<br>
+        <strong style="color:var(--gold)">Jornada (lliga):</strong> J1 / J2 / J3 / J4 / J5 / J6 / J7 / J8<br>
+        <strong style="color:var(--gold)">Jornada (playoff / elim.):</strong> A (anada) / T (tornada)<br>
+        <strong style="color:var(--gold)">Jornada (final):</strong> F<br>
         <strong style="color:var(--gold)">Posicio:</strong> POR / DEF / MIG / DAV<br>
         <strong style="color:var(--gold)">Nota:</strong> Decimal SofaScore (ex: 7.2)<br>
-        <strong style="color:var(--gold)">Gols / Assistencies:</strong> Número enter<br><br>
-        <strong>Sistema de punts (Mister/SofaScore):</strong><br>
-        Nota per trams (6.0=0pts, 7.0=5pts, 9.3+=12pts)<br>
+        <strong style="color:var(--gold)">Gols / Assistencies / Penalti:</strong> Número enter<br>
+        <strong style="color:var(--gold)">DobleGroga / Vermella:</strong> 0 o 1<br><br>
+        <strong>Sistema de punts:</strong><br>
+        Nota ≥9.0=12 · ≥8.5=10 · ≥8.0=8 · ≥7.5=6 · ≥7.0=4 · ≥6.5=2 · ≥6.0=0 · &lt;6.0=-2<br>
         Gol: POR+6 / DEF+5 / MIG+4 / DAV+3<br>
-        Assistència: +3 · Penal: +3<br>
-        Doble groga: -3 · Vermella: -6<br><br>
-        <strong>Canvis — columna Fase:</strong><br>
-        r16 · r8 · qf · sf · final<br>
-        <span style="font-size:0.75rem;opacity:0.7">(indica a partir de quina fase és actiu)</span>
+        Assistència: +2 · Penal: +3 · D.Groga: -3 · Vermella: -6<br><br>
+        <strong>Columna Eliminat (Jugadors):</strong> SI / NO<br>
+        <span style="font-size:0.75rem;opacity:0.7">Marca SI quan l'equip real del jugador és eliminat de la Champions. Afecta si apareix a les opcions de capità i cartes.</span><br><br>
+        <strong>Columna Es_Original (Jugadors):</strong> SI / (buit)<br>
+        <span style="font-size:0.75rem;opacity:0.7">SI per als jugadors del draft inicial. Els fitxats posteriorment via canvi deixen la cel·la buida.</span>
       </p>
     </div>
     <div class="admin-card">
@@ -3664,7 +3666,7 @@ function renderAdminPanel() {
         Contrasenya actual: <code style="font-size:0.85rem;background:rgba(255,255,255,0.07);padding:4px 10px;border-radius:6px;color:var(--gold)">${ADMIN_PASSWORD}</code>
       </p>
       <p style="font-size:0.82rem;color:var(--silver);margin-bottom:0.8rem">Per canviar-la, edita el fitxer a GitHub i busca la línia <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px">ADMIN_PASSWORD</code>.</p>
-      <a href="https://github.com/polcome/Mundial-2026" target="_blank" class="btn-primary btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:0.4rem">
+      <a href="https://github.com/polcome/ChampionsLeague27" target="_blank" class="btn-primary btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:0.4rem">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
         Obrir repositori GitHub
       </a>
@@ -3675,18 +3677,32 @@ function renderAdminPanel() {
         Comparteix aquesta URL amb els amics. Podran veure la classificació en temps real sense cap contrasenya.
       </p>
       <div style="background:rgba(255,255,255,0.07);border-radius:8px;padding:0.7rem 1rem;font-family:'Space Mono',monospace;font-size:0.72rem;color:var(--gold);word-break:break-all;margin-bottom:0.8rem">
-        https://polcome.github.io/Mundial-2026/
+        https://polcome.github.io/ChampionsLeague27/
       </div>
-      <button class="btn-gold btn-sm" onclick="navigator.clipboard.writeText('https://polcome.github.io/Mundial-2026/').then(()=>showToast('✅ URL copiada!'))">📋 Copiar URL</button>
+      <button class="btn-gold btn-sm" onclick="navigator.clipboard.writeText('https://polcome.github.io/ChampionsLeague27/').then(()=>showToast('✅ URL copiada!'))">📋 Copiar URL</button>
     </div>
     <div class="admin-card">
       <h3>🌟 Calcular 11 Ideals</h3>
       <p style="font-size:0.82rem;color:var(--silver);line-height:1.6;margin-bottom:0.8rem">
-        Escriu al Sheet <strong style="color:var(--gold)">11_Ideals</strong> els 11 millors jugadors de cada jornada amb puntuació. Posa tu manualment el camp <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">Rol_11ideal</code> per al posicionament exacte al camp.
+        Escriu al Sheet <strong style="color:var(--gold)">11_Ideals</strong> els 11 millors jugadors de cada jornada amb puntuació base (sense efectes de capità ni cartes). Posa tu manualment el camp <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">Rol_11ideal</code> per al posicionament exacte al camp. El botó preserva els rols ja assignats — només sobreescriu els jugadors que canvien.
       </p>
-      <p style="font-size:0.78rem;color:rgba(245,200,66,0.6);margin-bottom:0.8rem">⚠️ Sobreescriu les files ja existents de les jornades calculades.</p>
+      <p style="font-size:0.78rem;color:rgba(74,159,255,0.7);margin-bottom:0.8rem">ℹ️ Funciona per a totes les jornades de lliga (J1–J8) i eliminatòries (A/T/F).</p>
       <button class="btn-gold btn-sm" onclick="adminCalcIdeal11()" id="btnCalcIdeal11">🌟 Calcular i escriure 11 Ideals</button>
       <div id="ideal11AdminLog" style="margin-top:0.8rem;font-size:0.78rem;color:var(--silver);font-family:'Space Mono',monospace;line-height:1.8"></div>
+    </div>
+    <div class="admin-card">
+      <h3>📅 Fases de la Champions</h3>
+      <p style="font-size:0.82rem;color:var(--silver);line-height:1.7">
+        <strong style="color:var(--gold)">Fase de Lliga</strong> — 8 jornades (J1–J8)<br>
+        <span style="font-size:0.75rem;opacity:0.7">32 equips, tots juguen entre ells. Top 8 → directes a 8ens.</span><br><br>
+        <strong style="color:var(--gold)">Play-off</strong> — Anada (A) + Tornada (T)<br>
+        <span style="font-size:0.75rem;opacity:0.7">Posicions 9–24. Els jugadors d'equips Top 8 (no juguen) puntuen amb nota mitjana + bonus. Pendent de definir.</span><br><br>
+        <strong style="color:var(--gold)">Vuitens de Final</strong> — Anada (A) + Tornada (T)<br>
+        <strong style="color:var(--gold)">Quarts de Final</strong> — Anada (A) + Tornada (T)<br>
+        <strong style="color:var(--gold)">Semifinals</strong> — Anada (A) + Tornada (T)<br>
+        <strong style="color:var(--gold)">Final</strong> — (F)<br><br>
+        <span style="font-size:0.75rem;opacity:0.7">A la columna <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">Fase</code> del Sheet escriu exactament: <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px">lliga / playoff / r16 / qf / sf / final</code></span>
+      </p>
     </div>
   </div>
 
