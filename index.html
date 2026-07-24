@@ -623,10 +623,10 @@ const ADMIN_PASS_HASH = 'a8c9b8f3e2e9c9a1c3b2d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c
 const ADMIN_PASSWORD = 'champions2627admin';
 // ============================================================
 
-const PHASES = ['lliga','playoff','r16','qf','sf','final'];
-const PHASE_LABELS = {lliga:'Fase de Lliga', playoff:'Play-off', r16:'Vuitens de Final', qf:'Quarts de Final', sf:'Semifinals', final:'Final'};
+const PHASES = ['lliga','playoff','r8','qf','sf','final'];
+const PHASE_LABELS = {lliga:'Fase de Lliga', playoff:'Play-off', r8:'Vuitens de Final', qf:'Quarts de Final', sf:'Semifinals', final:'Final'};
 // Grups té 3 jornades. La resta són eliminatòries (1 puntuació per partit)
-const PHASE_JORNADES = {lliga:['J1','J2','J3','J4','J5','J6','J7','J8'], playoff:['A','T'], r16:['A','T'], qf:['A','T'], sf:['A','T'], final:['F']};
+const PHASE_JORNADES = {lliga:['J1','J2','J3','J4','J5','J6','J7','J8'], playoff:['A','T'], r8:['A','T'], qf:['A','T'], sf:['A','T'], final:['F']};
 
 // Ordre seqüencial de totes les fase+jornada (per determinar canvis actius)
 const ALL_JORNADES_ORDER = PHASES.flatMap(ph => PHASE_JORNADES[ph].map(j => `${norm(ph)}_${norm(j)}`));
@@ -634,7 +634,7 @@ function jornadaIndex(fase, jornada) {
   return ALL_JORNADES_ORDER.indexOf(`${norm(fase)}_${norm(jornada)}`);
 }
 const PHASE_JORN_LABEL = {lliga:true, playoff:true, r16:true, qf:true, sf:true, final:false};
-const PHASE_ICONS = {lliga:'⚽', playoff:'🎯', r16:'💫', qf:'🟠', sf:'🔴', final:'🏆'};
+const PHASE_ICONS = {lliga:'⚽', playoff:'🎯', r8:'💫', qf:'🟠', sf:'🔴', final:'🏆'};
 
 // Retorna totes les fase+jornada ESTRICTAMENT ANTERIORS a la donada, en ordre
 // cronològic (de la més antiga a la més recent), amb el format original
@@ -652,7 +652,7 @@ function getJornadesAnteriors(fase, jornada) {
   }
   return result;
 }
-const PHASE_COLORS = {lliga:'seg-grp', playoff:'seg-po', r16:'seg-16', qf:'seg-qf', sf:'seg-sf', final:'seg-fin'};
+const PHASE_COLORS = {lliga:'seg-grp', playoff:'seg-po', r8:'seg-16', qf:'seg-qf', sf:'seg-sf', final:'seg-fin'};
 
 // Google Sheets API — lectura pública
 const SHEETS_API = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values`;
@@ -1041,7 +1041,7 @@ function changeFaseToPhase(rawFase) {
   if (PHASES.includes(f)) return f;
   // Fallback per a valors antics tipus "post-grups"
   if (f.includes('post-grups') || f.includes('grups'))  return 'grups';
-  if (f.includes('post-r16')   || f.includes('16ens'))  return 'r16';
+  if (f.includes('r8') || f.includes('vuitens') || f.includes('16ens')) return 'r8';
   if (f.includes('post-r8')    || f.includes('vuitens') || f.includes('octavos')) return 'r8';
   if (f.includes('post-qf')    || f.includes('quarts')) return 'qf';
   if (f.includes('post-sf')    || f.includes('semis'))  return 'sf';
@@ -1707,7 +1707,7 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
       const pData = playerDataMap[nom];
       const pos = pData ? pData.pos : 'MIG';
       let sc = nom ? getScoreEfectiu(participant, nom, phase, jornada) : null;
-      if (!sc && tryJ1Fallback && jornada==='E1') sc = getScore(participant, nom, phase, 'J1');
+      if (!sc && tryJ1Fallback && jornada==='A') sc = getScore(participant, nom, phase, 'J1');
       const pin = playerPin(nom, pos, sc, jornada, participant, phase);
       cellsHtml += `<div class="pitch-cell" style="grid-row:${row+1};grid-column:${col+1}">${pin}</div>`;
     }
@@ -1747,7 +1747,7 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
     const names = getSlots(pos);
     const pins = names.map(name => {
       let sc = name ? getScoreEfectiu(participant, name, phase, jornada) : null;
-      if (!sc && tryJ1Fallback && jornada === 'E1') sc = name ? getScore(participant, name, phase, 'J1') : null;
+      if (!sc && tryJ1Fallback && jornada === 'A') sc = name ? getScore(participant, name, phase, 'J1') : null;
       return playerPin(name, pos, sc, jornada, participant, phase);
     }).join('');
     return `<div class="pitch-row ${rowClass}">${pins}</div>`;
@@ -1756,7 +1756,7 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
   // Total de la jornada/eliminatòria
   const total = phasePlayers.reduce((s,pl) => {
     let sc = getScoreEfectiu(participant, v(pl,'Jugador'), phase, jornada);
-    if (!sc && tryJ1Fallback && jornada === 'E1') sc = getScoreEfectiu(participant, v(pl,'Jugador'), phase, 'J1');
+    if (!sc && tryJ1Fallback && jornada === 'A') sc = getScoreEfectiu(participant, v(pl,'Jugador'), phase, 'J1');
     const pts = calcScoreRow(sc, v(pl,'Posicio'), v(pl,'Jugador'), phase, jornada, participant);
     return s + (pts || 0);
   }, 0);
@@ -1766,7 +1766,7 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
   const listRows = phasePlayers.map((pl, plIdx) => {
     const name = v(pl,'Jugador'), pos2orig = (v(pl,'Posicio')||'MIG').toUpperCase();
     let sc2 = getScoreEfectiu(participant, name, phase, jornada);
-    if (!sc2 && tryJ1Fallback && jornada === 'E1') sc2 = getScoreEfectiu(participant, name, phase, 'J1');
+    if (!sc2 && tryJ1Fallback && jornada === 'A') sc2 = getScoreEfectiu(participant, name, phase, 'J1');
     // Posició per al càlcul de gols: la del jugador EFECTIU (qui realment ha marcat)
     const efectiu2 = getJugadorEfectiu(participant, name, phase, jornada);
     let pos2 = pos2orig;
@@ -1952,7 +1952,7 @@ let _activeJornada = 'J1';
 
 function selectTeam(participant) {
   _activeParticipant = participant;
-  _activePhase = FASE_ACTIVA_GLOBAL || 'grups';
+  _activePhase = FASE_ACTIVA_GLOBAL || 'lliga';
   _activeJornada = JORNADA_ACTIVA_GLOBAL || 'J1';
   const sel = document.getElementById('teamSelect');
   if (sel && sel.value !== participant) sel.value = participant;
@@ -2030,7 +2030,7 @@ function _renderTeamFull() {
   }
 
   // Camp
-  const jornada = _activePhase === 'grups' ? _activeJornada : 'E1';
+  const jornada = _activePhase === 'grups' ? _activeJornada : 'A';
   let pitchHtml = '';
   try {
     pitchHtml = renderPitch(participant, _activePhase, jornada, _activePhase !== 'grups');
@@ -2119,7 +2119,7 @@ function openPlayerCard(name, participant, phase, jornada) {
 
   // Get score
   let sc = getScoreEfectiu(participant, name, phase, jornada);
-  if (!sc && jornada === 'E1') sc = getScoreEfectiu(participant, name, phase, 'J1');
+  if (!sc && jornada === 'A') sc = getScoreEfectiu(participant, name, phase, 'J1');
 
   // Posició efectiva per al càlcul de gols (jugador que ha rebut via canvi)
   const efectiuCard = getJugadorEfectiu(participant, name, phase, jornada);
@@ -2900,7 +2900,7 @@ function statsJugadorsTable(jugadorsList, participant, isGlobal, prefix) {
         const ot = otorgatsPerJornada.find(o=>o.ph===j.ph&&o.jorn===j.jorn);
         const bonus = [j.g>0?`<span style="color:#6EE89A">⚽ ×${j.g}</span>`:'',j.a>0?`<span style="color:#7DC3F5">🅰️ ×${j.a}</span>`:'',j.pen>0?`<span style="color:#6EE89A">🥅 ×${j.pen}</span>`:'',j.dg>0?`<span style="color:#F5C842">🟨</span>`:'',j.vm>0?`<span style="color:#F58080">🟥</span>`:''
         ].filter(Boolean).join(' ');
-        const jl = ph==='grups'?j.jorn.toUpperCase():'E1';
+        const jl = ph==='grups'?j.jorn.toUpperCase():'A';
         const nc = j.nota===null?'score-empty':j.nota>=8?'score-high':j.nota>=6.5?'score-mid':'score-low';
         const otCol = ot?`<span style="min-width:120px;text-align:right;font-size:0.72rem"><strong style="color:${ot.ptsOt>0?'#6EE89A':ot.ptsOt<0?'#F58080':'var(--silver)'}">${ot.ptsOt.toFixed(0)} pts</strong> · <strong style="color:var(--white)">${ot.equip}</strong></span>`:'<span></span>';
         return `<div style="display:grid;grid-template-columns:4rem 1fr auto auto auto;align-items:center;gap:0.6rem;padding:0.45rem 0;border-bottom:1px solid rgba(255,255,255,0.05)">
