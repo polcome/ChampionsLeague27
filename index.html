@@ -538,8 +538,8 @@
       </select>
       <select id="filterFase" onchange="renderJugadorsTab()" style="background:rgba(255,255,255,0.07);border:1px solid var(--glass-border);border-radius:6px;padding:0.4rem 0.7rem;color:var(--white);font-size:0.82rem">
         <option value="">Totes les fases</option>
-        <option value="grups">Fase de Grups</option>
-        <option value="r16">16ens</option>
+        <option value="lliga">Fase de Grups</option>
+        <option value="r8">16ens</option>
         <option value="r8">Vuitens</option>
         <option value="qf">Quarts</option>
         <option value="sf">Semifinals</option>
@@ -664,7 +664,7 @@ let _ideal11ActiveFase = null;
 let _ideal11ActiveJorn = null;
 let isAdmin = false;
 let currentTeamTab = null;
-let currentJornada = {phase: 'grups', jorn: 'J1'};
+let currentJornada = {phase: 'lliga', jorn: 'J1'};
 
 // ============================================================
 // LECTURA DEL GOOGLE SHEET (via gviz — no necessita API key)
@@ -1040,7 +1040,7 @@ function changeFaseToPhase(rawFase) {
   const f = norm(rawFase);
   if (PHASES.includes(f)) return f;
   // Fallback per a valors antics tipus "post-grups"
-  if (f.includes('post-grups') || f.includes('grups'))  return 'grups';
+  if (f.includes('post-grups') || f.includes('lliga'))  return 'lliga';
   if (f.includes('r8') || f.includes('vuitens') || f.includes('16ens')) return 'r8';
   if (f.includes('post-r8')    || f.includes('vuitens') || f.includes('octavos')) return 'r8';
   if (f.includes('post-qf')    || f.includes('quarts')) return 'qf';
@@ -1519,7 +1519,7 @@ function openPlayerCardIdeal(name, fase, jorn) {
 // Per-participant state
 // _st defined below
 function getTeamState(p) {
-  if (!_st[p]) _st[p] = { phase: 'grups', jorn: 'J1' };
+  if (!_st[p]) _st[p] = { phase: 'lliga', jorn: 'J1' };
   return _st[p];
 }
 
@@ -1947,7 +1947,7 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
 // Estat simple: quina fase i jornada té activa cada participant
 // Estat global simple — un sol equip actiu a la vegada
 let _activeParticipant = '';
-let _activePhase = 'grups';
+let _activePhase = 'lliga';
 let _activeJornada = 'J1';
 
 function selectTeam(participant) {
@@ -2031,11 +2031,11 @@ function _renderTeamFull() {
       }).join('') + '</div>';
   }
 
-  // Camp
-  const jornada = _activePhase === 'grups' ? _activeJornada : 'A';
+  // Camp — usa sempre _activeJornada (ja és correcte per a totes les fases)
+  const jornada = _activeJornada;
   let pitchHtml = '';
   try {
-    pitchHtml = renderPitch(participant, _activePhase, jornada, _activePhase !== 'grups');
+    pitchHtml = renderPitch(participant, _activePhase, jornada, false);
   } catch(e) {
     console.error('renderPitch error:', e);
     pitchHtml = `<div class="empty-state"><div class="big-icon">⚠️</div><p>Error: ${e.message}</p></div>`;
@@ -2902,7 +2902,7 @@ function statsJugadorsTable(jugadorsList, participant, isGlobal, prefix) {
         const ot = otorgatsPerJornada.find(o=>o.ph===j.ph&&o.jorn===j.jorn);
         const bonus = [j.g>0?`<span style="color:#6EE89A">⚽ ×${j.g}</span>`:'',j.a>0?`<span style="color:#7DC3F5">🅰️ ×${j.a}</span>`:'',j.pen>0?`<span style="color:#6EE89A">🥅 ×${j.pen}</span>`:'',j.dg>0?`<span style="color:#F5C842">🟨</span>`:'',j.vm>0?`<span style="color:#F58080">🟥</span>`:''
         ].filter(Boolean).join(' ');
-        const jl = ph==='grups'?j.jorn.toUpperCase():'A';
+        const jl = ph==='lliga'?j.jorn.toUpperCase():'A';
         const nc = j.nota===null?'score-empty':j.nota>=8?'score-high':j.nota>=6.5?'score-mid':'score-low';
         const otCol = ot?`<span style="min-width:120px;text-align:right;font-size:0.72rem"><strong style="color:${ot.ptsOt>0?'#6EE89A':ot.ptsOt<0?'#F58080':'var(--silver)'}">${ot.ptsOt.toFixed(0)} pts</strong> · <strong style="color:var(--white)">${ot.equip}</strong></span>`:'<span></span>';
         return `<div style="display:grid;grid-template-columns:4rem 1fr auto auto auto;align-items:center;gap:0.6rem;padding:0.45rem 0;border-bottom:1px solid rgba(255,255,255,0.05)">
@@ -3503,7 +3503,7 @@ function renderJugadorsTab() {
               j.dg>0?`<span style="color:#F5C842">🟨</span>`:'',
               j.vm>0?`<span style="color:#F58080">🟥</span>`:''
             ].filter(Boolean).join(' ');
-            const jornLabel = ph.phase === 'grups' ? j.jorn : 'Eliminatòria';
+            const jornLabel = ph.phase === 'lliga' ? j.jorn : 'Eliminatòria';
             const notaCls = j.nota===null?'score-empty':j.nota>=8?'score-high':j.nota>=6.5?'score-mid':'score-low';
             return `<div style="display:grid;grid-template-columns:5rem 1fr auto auto;align-items:center;gap:0.8rem;padding:0.45rem 0;border-bottom:1px solid rgba(255,255,255,0.05)">
               <span style="font-family:'Space Mono',monospace;font-size:0.65rem;color:var(--silver)">${jornLabel}</span>
@@ -4000,7 +4000,14 @@ document.getElementById('mainNav').addEventListener('click', e => {
   if (tab === 'canvis') renderCanvis();
   if (tab === 'teams') {
     const sel = document.getElementById('teamSelect');
-    if (sel?.value) selectTeam(sel.value);
+    if (sel?.value) {
+      // Si ja tenim un equip actiu, simplement re-renderitzem sense resetar fase/jornada
+      if (_activeParticipant === sel.value) {
+        _renderTeamFull();
+      } else {
+        selectTeam(sel.value);
+      }
+    }
   }
 });
 
@@ -4165,7 +4172,7 @@ function detectarFaseJornada() {
   }
   if (!faseSel) { faseSel = faseRev; jorSel = jorRev2; }
 
-  FASE_ACTIVA_GLOBAL    = faseRev || 'grups';
+  FASE_ACTIVA_GLOBAL    = faseRev || 'lliga';
   JORNADA_ACTIVA_GLOBAL = jorRev2 || 'J1';
   FASE_SELECCIO         = faseSel || faseRev;
   JORNADA_SELECCIO      = jorSel  || jorRev2;
@@ -5557,7 +5564,7 @@ async function init() {
 
   // Render inicial
   renderRanking();
-  renderJornades('grups', 'J1');
+  renderJornades('lliga', 'J1');
   renderCanvis();
 
   // Restaura sessió admin si existia
