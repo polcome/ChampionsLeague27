@@ -633,7 +633,7 @@ const ALL_JORNADES_ORDER = PHASES.flatMap(ph => PHASE_JORNADES[ph].map(j => `${n
 function jornadaIndex(fase, jornada) {
   return ALL_JORNADES_ORDER.indexOf(`${norm(fase)}_${norm(jornada)}`);
 }
-const PHASE_JORN_LABEL = {lliga:true, playoff:true, r16:true, qf:true, sf:true, final:false};
+const PHASE_JORN_LABEL = {lliga:true, playoff:true, r8:true, qf:true, sf:true, final:false};
 const PHASE_ICONS = {lliga:'⚽', playoff:'🎯', r8:'💫', qf:'🟠', sf:'🔴', final:'🏆'};
 
 // Retorna totes les fase+jornada ESTRICTAMENT ANTERIORS a la donada, en ordre
@@ -1961,7 +1961,8 @@ function selectTeam(participant) {
 
 function selectPhase(phase) {
   _activePhase = phase;
-  _activeJornada = (norm(phase) === norm(FASE_ACTIVA_GLOBAL)) ? (JORNADA_ACTIVA_GLOBAL || 'J1') : 'J1';
+  const firstJorn = (PHASE_JORNADES[phase] || [])[0] || 'J1';
+  _activeJornada = (norm(phase) === norm(FASE_ACTIVA_GLOBAL)) ? (JORNADA_ACTIVA_GLOBAL || firstJorn) : firstJorn;
   _renderTeamFull();
 }
 
@@ -2012,20 +2013,21 @@ function _renderTeamFull() {
     return `<button class="phase-tab-btn${active}" onclick="selectPhase('${ph}')">${PHASE_ICONS[ph]} ${PHASE_LABELS[ph]}${badge}</button>`;
   }).join('');
 
-  // Jornada tabs — només a grups
+  // Jornada tabs — per a totes les fases que tinguin més d'una jornada
   let jornHtml = '';
-  if (_activePhase === 'grups') {
-    jornHtml = '<div style="display:flex;gap:0;border-bottom:1px solid var(--glass-border);margin-bottom:1rem">' +
-      ['J1','J2','J3'].map(j => {
+  const jornsActives = PHASE_JORNADES[_activePhase] || [];
+  if (jornsActives.length > 1) {
+    jornHtml = '<div style="display:flex;gap:0;border-bottom:1px solid var(--glass-border);margin-bottom:1rem;flex-wrap:wrap">' +
+      jornsActives.map(j => {
         const active = j === _activeJornada;
-        // Calcula punts de la jornada
-        const jPlayers = getPlayersForPhase(participant, 'grups', j);
+        const jPlayers = getPlayersForPhase(participant, _activePhase, j);
         const jPts = jPlayers.reduce((s, pl) => {
-          const sc = getScoreEfectiu(participant, v(pl,'Jugador'), 'grups', j);
-          return s + (calcScoreRow(sc, v(pl,'Posicio'), v(pl,'Jugador'), 'grups', j, participant) || 0);
+          const sc = getScoreEfectiu(participant, v(pl,'Jugador'), _activePhase, j);
+          return s + (calcScoreRow(sc, v(pl,'Posicio'), v(pl,'Jugador'), _activePhase, j, participant) || 0);
         }, 0);
-        const badge = jPts > 0 ? `<span style="background:rgba(245,200,66,0.15);color:var(--gold);font-size:0.55rem;padding:1px 5px;border-radius:8px;margin-left:4px">${jPts}</span>` : '';
-        return `<button onclick="selectJorn('${j}')" style="background:none;border:none;cursor:pointer;padding:0.7rem 1rem;font-family:'Space Mono',monospace;font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:${active?'var(--gold)':'var(--silver)'};border-bottom:2px solid ${active?'var(--gold)':'transparent'};display:flex;align-items:center;gap:2px">${j}${badge}</button>`;
+        const badge = jPts > 0 ? `<span style="background:rgba(74,159,255,0.15);color:#4A9FFF;font-size:0.55rem;padding:1px 5px;border-radius:8px;margin-left:4px">${jPts}</span>` : '';
+        const jLabel = _activePhase === 'lliga' ? j : (j === 'A' ? 'Anada' : j === 'T' ? 'Tornada' : j);
+        return `<button onclick="selectJorn('${j}')" style="background:none;border:none;cursor:pointer;padding:0.7rem 1rem;font-family:'Space Mono',monospace;font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:${active?'#4A9FFF':'var(--silver)'};border-bottom:2px solid ${active?'#4A9FFF':'transparent'};display:flex;align-items:center;gap:2px">${jLabel}${badge}</button>`;
       }).join('') + '</div>';
   }
 
