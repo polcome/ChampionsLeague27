@@ -4105,7 +4105,9 @@ function detectarFaseJornada() {
     mapa[key][norm(v(r,'Periode'))] = parseDataCalendari(v(r,'Data'));
   });
 
-  const ordre = ['grups_j1','grups_j2','grups_j3','r16_e1','r8_e1','qf_e1','sf_e1','final_e1'];
+  // Ordre de jornades generat dinàmicament des de PHASES/PHASE_JORNADES
+  // (evita hardcodejar grups_j1, r16_e1, etc.)
+  const ordre = PHASES.flatMap(ph => (PHASE_JORNADES[ph]||[]).map(j => norm(ph)+'_'+norm(j)));
 
   // === JORNADA REVELADA: la que s'està jugant ara, o l'última jugada ===
   let faseRev = null, jorRev2 = null, isRevelada = false;
@@ -4561,8 +4563,8 @@ function rLogout() {
 // mantenir l'històric de totes les jornades ja carregades (no només
 // l'activa), així el capità/cartes d'una jornada passada queden
 // "congelats" i segueixen aplicant-se encara que avancem de jornada.
-// Estructura: _capitansMap['grups_j1'] = { participant_norm: 'NomCapita' }
-//             _cartesGastades['grups_j1'] = { participant_norm: {carta,detall,via_comodi} }
+// Estructura: _capitansMap['lliga_j1'] = { participant_norm: 'NomCapita' }
+//             _cartesGastades['lliga_j1'] = { participant_norm: {carta,detall,via_comodi} }
 // ============================================================
 function jKey(fase, jornada) { return `${norm(fase)}_${norm(jornada)}`; }
 function capitansSlot(fase, jornada) { return _capitansMap[jKey(fase, jornada)] || {}; }
