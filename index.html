@@ -747,16 +747,18 @@ async function loadAllData() {
   clearCache();
   setSyncBar('loading');
   try {
-    const [parts, jugadors, punts, canvis, ideal11] = await Promise.all([
+    const [parts, jugadors, punts, canvis, ideal11, entrenadors] = await Promise.all([
       fetchSheet('Participants').then(parseSheet).catch(e => { console.warn('Participants:', e); return []; }),
       fetchSheet('Jugadors').then(parseSheet).catch(e => { console.warn('Jugadors:', e); return []; }),
       fetchSheet('Puntuacions').then(parseSheet).catch(e => { console.warn('Puntuacions:', e); return []; }),
       fetchSheet('Canvis').then(parseSheet).catch(e => { console.warn('Canvis:', e); return []; }),
       fetchSheet('11_Ideals').then(parseSheet).catch(e => { console.warn('11_Ideals:', e); return []; }),
+      fetchSheet('Entrenadors').then(parseSheet).catch(e => { console.warn('Entrenadors:', e); return []; }),
     ]);
 
     gData = { participants: parts, jugadors, puntuacions: punts, canvis };
     _ideal11Rols = ideal11 || [];
+    _entrenadors = entrenadors || [];
 
     setSyncBar('done');
     document.getElementById('lastUpdate').textContent =
@@ -1176,14 +1178,73 @@ function calcPlayerPhasePts(participant, jugador, fase) {
   return total;
 }
 
+// ── Suplent ──────────────────────────────────────────────────────────────────
+// El suplent és el jugador amb rol SUP a la jornada.
+// S'activa si algun titular té nota=0 o absent.
+function getSuplent(participant, fase, jornada) {
+  const players = getPlayersForPhase(participant, fase, jornada);
+  const sup = players.find(pl => {
+    const rol = getRolEfectiu(pl, fase, jornada);
+    return norm(rol) === 'sup';
+  });
+  return sup || null;
+}
+
+function getTitulars(participant, fase, jornada) {
+  const players = getPlayersForPhase(participant, fase, jornada);
+  return players.filter(pl => {
+    const rol = getRolEfectiu(pl, fase, jornada);
+    return norm(rol) !== 'sup';
+  });
+}
+
+function isSuplentActiu(participant, fase, jornada) {
+  // El suplent s'activa si algun titular no ha jugat (nota=0 o absent)
+  const titulars = getTitulars(participant, fase, jornada);
+  return titulars.some(pl => {
+    const sc = getScore(participant, v(pl,'Jugador'), fase, jornada);
+    if (!sc || v(sc,'Nota') === '') return true; // absent
+    return noHaJugat(sc); // nota = 0
+  });
+}
+
+function getSuplentPts(participant, fase, jornada) {
+  const sup = getSuplent(participant, fase, jornada);
+  if (!sup) return 0;
+  if (!isSuplentActiu(participant, fase, jornada)) return 0;
+  const sc = getScoreEfectiu(participant, v(sup,'Jugador'), fase, jornada);
+  return calcScoreRow(sc, v(sup,'Posicio'), v(sup,'Jugador'), fase, jornada, participant) || 0;
+}
+
+// ── Entrenador ────────────────────────────────────────────────────────────────
+// Pestanya "Entrenadors" al Sheet: Participant | Fase | Jornada | Punts | Nom | Foto
+let _entrenadors = []; // carregat amb les altres dades
+
+function getEntrenadorPts(participant, fase, jornada) {
+  if (!_entrenadors.length) return 0;
+  const row = _entrenadors.find(r =>
+    norm(v(r,'Participant')) === norm(participant) &&
+    norm(v(r,'Fase')) === norm(fase) &&
+    norm(v(r,'Jornada')) === norm(jornada)
+  );
+  if (!row) return 0;
+  const pts = parseFloat(v(row,'Punts'));
+  return isNaN(pts) ? 0 : pts;
+}
+
+function getEntrenadorInfo(participant) {
+  // Retorna la info de l'entrenador (nom i foto) — agafa qualsevol fila d'aquest participant
+  if (!_entrenadors.length) return null;
+  return _entrenadors.find(r => norm(v(r,'Participant')) === norm(participant)) || null;
+}
+
 function calcParticipantTotal(participant) {
   const k = 'total_' + participant;
   if (_cache[k] !== undefined) return _cache[k];
   let total = 0;
   for (const ph of PHASES) {
     for (const jorn of PHASE_JORNADES[ph] || []) {
-      // Roster específic d'AQUESTA jornada (respecta canvis fets jornada a jornada)
-      const jornPlayers = getPlayersForPhase(participant, ph, jorn);
+      const jornPlayers = getTitulars(participant, ph, jorn);
       for (const pl of jornPlayers) {
         const jugador = v(pl,'Jugador');
         const pos = v(pl,'Posicio') || 'DAV';
@@ -1191,6 +1252,10 @@ function calcParticipantTotal(participant) {
         const pts = calcScoreRow(sc, pos, jugador, ph, jorn, participant);
         if (pts !== null) total += pts;
       }
+      // Suplent (si actiu)
+      total += getSuplentPts(participant, ph, jorn);
+      // Entrenador
+      total += getEntrenadorPts(participant, ph, jorn);
     }
   }
   _cache[k] = total;
@@ -1762,8 +1827,11 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
   }, 0);
   const totalStr = total > 0 ? `${total.toFixed(0)} pts` : 'Sense puntuació';
 
-  // Player list
-  const listRows = phasePlayers.map((pl, plIdx) => {
+  // Separa titulars i suplent per a la llista
+  const titularsList = phasePlayers.filter(pl => norm(getRolEfectiu(pl, phase, jornada)) !== 'sup');
+  const suplentList  = phasePlayers.filter(pl => norm(getRolEfectiu(pl, phase, jornada)) === 'sup');
+
+  const listRows = titularsList.map((pl, plIdx) => {
     const name = v(pl,'Jugador'), pos2orig = (v(pl,'Posicio')||'MIG').toUpperCase();
     let sc2 = getScoreEfectiu(participant, name, phase, jornada);
     if (!sc2 && tryJ1Fallback && jornada === 'A') sc2 = getScoreEfectiu(participant, name, phase, 'J1');
@@ -1927,6 +1995,50 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
     </div>`;
   }).join('');
 
+  // Fila suplent a la llista
+  const supActiuList = isSuplentActiu(participant, phase, jornada);
+  const supListRows = suplentList.map((pl, plIdx) => {
+    const name = v(pl,'Jugador'), pos2orig = (v(pl,'Posicio')||'MIG').toUpperCase();
+    const sc2 = getScoreEfectiu(participant, name, phase, jornada);
+    const note2 = sc2 ? parseNota(v(sc2,'Nota')) : null;
+    const g2 = sc2 ? parseInt(v(sc2,'Gols')||0) : 0;
+    const a2 = sc2 ? parseInt(v(sc2,'Assistencies')||0) : 0;
+    const pts2 = supActiuList ? (calcScoreRow(sc2, pos2orig, name, phase, jornada, participant) || 0) : 0;
+    const cls2 = note2===null?'score-empty':note2>=8?'score-high':note2>=6.5?'score-mid':'score-low';
+    const flag2 = getFlag(v(pl,'Equip'));
+    const noJugat2 = sc2 && noHaJugat(sc2);
+    const detailId = `detail-sup-${participant.replace(/\s/g,'-')}-${phase}-${jornada}-${plIdx}`;
+    const bonusChips = [];
+    if (g2>0) bonusChips.push(`<span class="bonus-chip" style="color:#6EE89A">⚽ ×${g2}</span>`);
+    if (a2>0) bonusChips.push(`<span class="bonus-chip" style="color:#7DC3F5">🅰️ ×${a2}</span>`);
+    const supColor = supActiuList ? '#F59E0B' : 'var(--silver)';
+    return `<div class="pitch-list-row" onclick="toggleDetail('${detailId}')" style="${supActiuList?'background:rgba(245,158,11,0.08);border-left:3px solid #F59E0B':'opacity:0.6'}">
+      <div class="pitch-list-name">
+        ${v(pl,'Foto')?`<img src="${v(pl,'Foto')}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${supColor}" onerror="this.style.display='none'">`:
+          `<div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1rem">👤</div>`}
+        <div>
+          <span style="font-weight:700;color:${supColor}">${name}</span>
+          <span class="pos-badge pos-${pos2orig}" style="margin-left:4px">${pos2orig}</span>
+          ${supActiuList?`<span style="background:#F59E0B;color:#050C1A;font-size:0.55rem;font-weight:800;padding:1px 6px;border-radius:8px;margin-left:4px">▶ ACTIU</span>`:''}
+          <small>${flag2} ${v(pl,'Equip')}</small>
+        </div>
+      </div>
+      <div class="pitch-list-note"><span class="score-chip ${noJugat2?'score-low':cls2}">${noJugat2?'😴':(note2!==null?note2.toFixed(1):'—')}</span></div>
+      <div class="pitch-list-bonus">${bonusChips.join('')||'<span style="color:rgba(255,255,255,0.2);font-size:0.7rem">—</span>'}</div>
+      <div class="pitch-list-total" style="color:${supActiuList?'#F59E0B':'var(--silver)'}">${supActiuList?pts2.toFixed(0):'—'}</div>
+      <div class="pitch-detail" id="${detailId}">
+        ${supActiuList?
+          `<div class="detail-line" style="background:rgba(245,158,11,0.1);border-radius:6px;padding:6px 8px;justify-content:flex-start;gap:0.5rem"><span>▶</span><span style="color:#F59E0B;font-size:0.78rem"><strong>Suplent actiu</strong> — entra per un titular que no ha jugat</span></div>`:
+          `<div class="detail-line" style="justify-content:center;opacity:0.5">Suplent — no actiu aquesta jornada</div>`}
+      </div>
+    </div>`;
+  }).join('');
+
+  const suplentSeparator = suplentList.length ? `
+    <div style="padding:0.4rem 0.8rem;font-family:'Space Mono',monospace;font-size:0.6rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--silver);opacity:0.6;border-top:1px solid var(--glass-border);margin-top:0.3rem">
+      Suplent
+    </div>${supListRows}` : '';
+
   const pitchContent = useRolMode ? renderRolMode() : `
       ${row('DAV','row-dav')}
       ${row('MIG','row-mig')}
@@ -1940,7 +2052,7 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
     </div>
     <div class="pitch-total">⚽ ${totalStr}</div>
   </div>
-  <div class="pitch-list">${listRows}</div>`;
+  <div class="pitch-list">${listRows}${suplentSeparator}</div>`;
 }
 
 // ---- NAVEGACIÓ D'EQUIP ----
@@ -2048,6 +2160,50 @@ function _renderTeamFull() {
     pitchHtml = `<div class="empty-state"><div class="big-icon">⚠️</div><p>Error: ${e.message}</p></div>`;
   }
 
+  // ── Banqueta: suplent + entrenador ────────────────────────────────────────
+  const supPl = getSuplent(participant, _activePhase, jornada);
+  const supActiu = supPl ? isSuplentActiu(participant, _activePhase, jornada) : false;
+  const supPts = supPl ? getSuplentPts(participant, _activePhase, jornada) : 0;
+  const entPts = getEntrenadorPts(participant, _activePhase, jornada);
+  const entInfo = getEntrenadorInfo(participant);
+
+  let benchHtml = '';
+  if (supPl || entInfo) {
+    const supSc = supPl ? getScore(participant, v(supPl,'Jugador'), _activePhase, jornada) : null;
+    const supNota = supSc ? parseNota(v(supSc,'Nota')) : null;
+    const supNotaCls = supNota===null?'score-empty':supNota>=8?'score-high':supNota>=6.5?'score-mid':'score-low';
+    const safeName = supPl ? esc(v(supPl,'Jugador')) : '';
+
+    const supPin = supPl ? `<div style="text-align:center;position:relative">
+      ${supActiu ? `<div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:#F59E0B;color:#050C1A;font-size:0.5rem;font-weight:800;padding:1px 6px;border-radius:8px;white-space:nowrap;font-family:'Space Mono',monospace;z-index:2">▶ ACTIU</div>` : ''}
+      <div style="position:relative;display:inline-block;cursor:pointer" onclick="openPlayerCard('${safeName}','${esc(participant)}','${_activePhase}','${jornada}')">
+        <div class="avatar" style="width:58px;height:58px;border:3px solid ${supActiu?'#F59E0B':'rgba(255,255,255,0.2)'};border-radius:50%;overflow:hidden;background:rgba(5,15,40,0.8);${supActiu?'box-shadow:0 0 16px rgba(245,158,11,0.6)':''}">
+          ${v(supPl,'Foto') ? `<img src="${v(supPl,'Foto')}" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<div style=font-size:1.4rem;display:flex;align-items:center;justify-content:center;height:100%>👤</div>'">` : `<div style="font-size:1.4rem;display:flex;align-items:center;justify-content:center;height:100%">👤</div>`}
+        </div>
+        <span class="score-chip ${supNotaCls}" style="position:absolute;top:-6px;right:-6px;font-size:0.65rem;padding:1px 5px">${supPts.toFixed(0)}</span>
+      </div>
+      <div class="pname" style="font-size:0.7rem;margin-top:4px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${supActiu?'#F59E0B':'var(--silver)'}">${v(supPl,'Jugador')}</div>
+      <div style="font-size:0.6rem;color:var(--silver);opacity:0.7">Suplent</div>
+    </div>` : '';
+
+    const entPin = entInfo ? `<div style="text-align:center">
+      <div style="position:relative;display:inline-block">
+        <div style="width:58px;height:58px;border:3px solid rgba(96,165,250,0.4);border-radius:50%;overflow:hidden;background:rgba(5,15,40,0.8)">
+          ${v(entInfo,'Foto') ? `<img src="${v(entInfo,'Foto')}" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<div style=font-size:1.4rem;display:flex;align-items:center;justify-content:center;height:100%>🧑‍💼</div>'">` : `<div style="font-size:1.4rem;display:flex;align-items:center;justify-content:center;height:100%">🧑‍💼</div>`}
+        </div>
+        <span style="position:absolute;top:-6px;right:-6px;background:${entPts>=5?'rgba(74,222,128,0.9)':entPts>=2?'rgba(250,204,21,0.9)':'rgba(156,163,175,0.7)'};color:#050C1A;font-family:'Space Mono',monospace;font-size:0.65rem;font-weight:700;padding:1px 5px;border-radius:8px">${entPts.toFixed(0)}</span>
+      </div>
+      <div class="pname" style="font-size:0.7rem;margin-top:4px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#60A5FA">${v(entInfo,'Nom')||'Entrenador'}</div>
+      <div style="font-size:0.6rem;color:var(--silver);opacity:0.7">Entrenador</div>
+    </div>` : '';
+
+    benchHtml = `<div style="display:flex;justify-content:space-around;align-items:flex-start;padding:0.8rem 1rem;margin-top:0.5rem;background:rgba(5,15,40,0.4);border:1px solid rgba(30,100,220,0.15);border-radius:10px;border-top:2px solid rgba(30,100,220,0.2)">
+      <div style="font-size:0.6rem;color:var(--silver);writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:0.15em;text-transform:uppercase;opacity:0.5;align-self:center">Banqueta</div>
+      ${supPin}
+      ${entPin}
+    </div>`;
+  }
+
   view.innerHTML = `
     <div class="team-header"><div>
       <div class="team-name-big">${participant}</div>
@@ -2060,7 +2216,8 @@ function _renderTeamFull() {
     </div>${(()=>{const pRow=(gData?.participants||[]).find(r=>norm(v(r,'Nom'))===norm(participant));const logo=pRow?v(pRow,'Logo'):'';return logo?`<img class="team-header-logo" src="${logo}" onerror="this.style.display='none'">`:'';})()}</div>
     <div class="phase-tabs" style="overflow-x:auto;scrollbar-width:none">${phaseTabs}</div>
     ${jornHtml}
-    ${pitchHtml}`;
+    ${pitchHtml}
+    ${benchHtml}`;
 }
 
 function renderPhaseContent(p, ph) { return ''; } // unused, kept for compat
