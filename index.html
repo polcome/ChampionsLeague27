@@ -2062,11 +2062,49 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
       ${row('DEF','row-def')}
       ${row('POR','row-por')}`;
 
+  // Banqueta — construïda aquí per tenir la mateixa amplada que el camp
+  const supPlR = getSuplent(participant, phase, jornada);
+  const supActiuR = supPlR ? isSuplentActiu(participant, phase, jornada) : false;
+  const supPtsR = supPlR ? getSuplentPts(participant, phase, jornada) : 0;
+  const entPtsR = getEntrenadorPts(participant, phase, jornada);
+  const entInfoR = getEntrenadorInfo(participant);
+
+  const makeBenchPinR = (foto, nom, pts, color, badge, rol) => `
+    <div style="text-align:center;min-width:64px">
+      <div style="position:relative;display:inline-block;cursor:${nom?'pointer':'default'}"
+        ${nom?`onclick="openPlayerCard('${esc(nom)}','${esc(participant)}','${phase}','${jornada}')"`:''}>
+        <div style="width:50px;height:50px;border-radius:50%;overflow:hidden;border:2.5px solid ${color};background:rgba(5,12,30,0.9);margin:0 auto;${badge?`box-shadow:0 0 12px ${color}55`:''}">
+          ${foto?`<img src="${foto}" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<div style=font-size:1.1rem;display:flex;align-items:center;justify-content:center;height:100%>${rol==='ent'?'🧑‍💼':'👤'}</div>'">`:`<div style="font-size:1.1rem;display:flex;align-items:center;justify-content:center;height:100%">${rol==='ent'?'🧑‍💼':'👤'}</div>`}
+        </div>
+        ${pts!==null?`<span style="position:absolute;top:-5px;right:-8px;background:${color};color:#050C1A;font-family:'Space Mono',monospace;font-size:0.6rem;font-weight:800;padding:1px 5px;border-radius:8px">${typeof pts==='number'?pts.toFixed(0):pts}</span>`:''}
+      </div>
+      ${badge?`<div style="font-size:0.48rem;font-weight:800;color:${color};letter-spacing:0.05em;text-transform:uppercase;margin-top:2px;font-family:'Space Mono',monospace">${badge}</div>`:`<div style="height:13px"></div>`}
+      <div style="font-size:0.67rem;color:var(--white);margin-top:1px;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600">${nom||'—'}</div>
+      <div style="font-size:0.52rem;color:var(--silver);opacity:0.6;text-transform:uppercase;letter-spacing:0.08em">${rol==='ent'?'Entrenador':'Suplent'}</div>
+    </div>`;
+
+  const supColorR = supActiuR?'#F59E0B':'rgba(255,255,255,0.2)';
+  const supPinR = supPlR
+    ? makeBenchPinR(v(supPlR,'Foto'), v(supPlR,'Jugador'), supActiuR?supPtsR:null, supColorR, supActiuR?'▶ ACTIU':'', 'sup')
+    : `<div style="min-width:64px;text-align:center;opacity:0.25"><div style="width:50px;height:50px;border-radius:50%;border:2px dashed rgba(255,255,255,0.2);margin:0 auto;display:flex;align-items:center;justify-content:center">👤</div><div style="font-size:0.52rem;color:var(--silver);margin-top:6px;text-transform:uppercase">Suplent</div></div>`;
+
+  const entColorR = entPtsR>=5?'#4ADE80':entPtsR>=2?'#FBBF24':'rgba(255,255,255,0.2)';
+  const entPinR = entInfoR
+    ? makeBenchPinR(v(entInfoR,'Foto'), v(entInfoR,'Nom')||'Entrenador', entPtsR, entColorR, '', 'ent')
+    : `<div style="min-width:64px;text-align:center;opacity:0.25"><div style="width:50px;height:50px;border-radius:50%;border:2px dashed rgba(255,255,255,0.2);margin:0 auto;display:flex;align-items:center;justify-content:center">🧑‍💼</div><div style="font-size:0.52rem;color:var(--silver);margin-top:6px;text-transform:uppercase">Entrenador</div></div>`;
+
+  const benchR = `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.7rem 1.2rem;background:linear-gradient(180deg,rgba(8,20,55,0.9),rgba(5,12,30,0.95));border-top:1px dashed rgba(30,100,220,0.25)">
+    ${supPinR}
+    <div style="font-family:'Space Mono',monospace;font-size:0.5rem;color:rgba(255,255,255,0.15);letter-spacing:0.25em;text-transform:uppercase">Banqueta</div>
+    ${entPinR}
+  </div>`;
+
   return `<div class="pitch-wrap">
-    <div class="pitch">
+    <div class="pitch" style="border-radius:10px 10px 0 0">
       <div class="pitch-lines"></div>
       ${pitchContent}
     </div>
+    <div style="border-radius:0 0 10px 10px;overflow:hidden;border:1px solid rgba(30,100,220,0.2);border-top:none">${benchR}</div>
     <div class="pitch-total">⚽ ${totalStr}</div>
   </div>
   <div class="pitch-list">${listRows}${suplentSeparator}</div>`;
@@ -2230,8 +2268,7 @@ function _renderTeamFull() {
     </div>${(()=>{const pRow=(gData?.participants||[]).find(r=>norm(v(r,'Nom'))===norm(participant));const logo=pRow?v(pRow,'Logo'):'';return logo?`<img class="team-header-logo" src="${logo}" onerror="this.style.display='none'">`:'';})()}</div>
     <div class="phase-tabs" style="overflow-x:auto;scrollbar-width:none">${phaseTabs}</div>
     ${jornHtml}
-    ${pitchHtml}
-    ${benchHtml}`;
+    ${pitchHtml}`;
 }
 
 function renderPhaseContent(p, ph) { return ''; } // unused, kept for compat
