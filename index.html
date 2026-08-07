@@ -1205,8 +1205,8 @@ function openEntrenadorCard(participant) {
   if (!entInfo) return;
   const nom = v(entInfo,'Nom') || 'Entrenador';
   const foto = v(entInfo,'Foto') || '';
+  const equipEnt = v(entInfo,'Equip') || '';
 
-  // Recull totes les jornades de l'entrenador
   const jornades = _entrenadors.filter(r => norm(v(r,'Participant')) === norm(participant));
 
   const photoHtml = foto
@@ -1219,7 +1219,6 @@ function openEntrenadorCard(participant) {
     const fase = v(r,'Fase'); const jorn = v(r,'Jornada');
     const label = `${PHASE_LABELS[norm(fase)]||fase} ${jorn.toUpperCase()}`;
     const res = pts >= 5 ? '🏆 Victòria' : pts >= 2 ? '🤝 Empat' : '❌ Derrota';
-    const col = pts >= 5 ? '#4ADE80' : pts >= 2 ? '#FBBF24' : '#F87171';
     totalPts += pts;
     return `<div class="detail-line">
       <span class="dl-label">${label} · ${res}</span>
@@ -1237,9 +1236,10 @@ function openEntrenadorCard(participant) {
       <div class="card-body">
         <div class="card-name">${nom}</div>
         <div class="card-meta">
+          ${equipEnt ? getClubBadge(equipEnt) : ''}
           <span style="background:rgba(74,159,255,0.15);border:1px solid rgba(74,159,255,0.3);color:#60A5FA;padding:2px 8px;border-radius:10px;font-size:0.65rem;font-family:'Space Mono',monospace">🧑‍💼 Entrenador · ${participant}</span>
         </div>
-        <div style="font-size:0.75rem;color:var(--silver);margin:0.5rem 0 0.3rem;font-family:'Space Mono',monospace;letter-spacing:0.08em;text-transform:uppercase">Sistema: Victòria +5 · Empat +2 · Derrota +0</div>
+        <div style="font-size:0.75rem;color:var(--silver);margin:0.5rem 0 0.3rem;font-family:'Space Mono',monospace;letter-spacing:0.08em;text-transform:uppercase">Victòria +5 · Empat +2 · Derrota +0</div>
         ${rows || '<div style="color:var(--silver);opacity:0.5;text-align:center;padding:0.5rem">Sense resultats registrats</div>'}
         ${jornades.length ? totalRow : ''}
       </div>
@@ -1723,7 +1723,7 @@ function playerPin(name, pos, sc, jorn, participant, phase) {
   const isBlinded = !jorOculta && pinP && teEscut(pinP, name, phase, jorn);
   const canviBadgeZ = isCanviat ? `<div style="position:absolute;bottom:-8px;right:-6px;z-index:15;background:#60A5FA;color:var(--ink);font-size:0.55rem;font-weight:800;padding:1px 4px;border-radius:4px;border:1px solid var(--ink);font-family:'Space Mono',monospace">🔀</div>` : '';
   const escutBadgeZ = isBlinded ? `<div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);z-index:15;background:#0EA5E9;color:#fff;font-size:0.7rem;padding:1px 5px;border-radius:4px;border:1px solid rgba(255,255,255,0.4)">🛡️</div>` : '';
-  const flagBadgeZ = equip ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);z-index:10;">${getClubBadge(equip)}</div>` : '';
+  const flagBadgeZ = plData ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);z-index:10;">${getClubBadge(v(plData,'Equip'))}</div>` : '';
 
   const innerHtml = photoUrl
     ? `<img src="${photoUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;z-index:1" onerror="this.style.display='none'">`
