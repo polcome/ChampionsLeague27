@@ -2,6 +2,9 @@
 <html lang="ca">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Champions League 26/27 — Fantasy League</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -1199,21 +1202,30 @@ function getTitulars(participant, fase, jornada) {
 }
 
 function isSuplentActiu(participant, fase, jornada) {
-  // El suplent s'activa si algun titular no ha jugat (nota=0 o absent)
+  const k = `supactiu_${participant}_${fase}_${jornada}`;
+  if (_cache[k] !== undefined) return _cache[k];
   const titulars = getTitulars(participant, fase, jornada);
-  return titulars.some(pl => {
+  // Actiu NOMÉS si nota === 0 explícit (ha jugat però no ha puntuat / ha jugat poc)
+  // Buit = equip encara no ha jugat → NO activa el suplent
+  const result = titulars.some(pl => {
     const sc = getScore(participant, v(pl,'Jugador'), fase, jornada);
-    if (!sc || v(sc,'Nota') === '') return true; // absent
-    return noHaJugat(sc); // nota = 0
+    if (!sc || v(sc,'Nota') === '' || v(sc,'Nota') === null || v(sc,'Nota') === undefined) return false;
+    const nota = parseNota(v(sc,'Nota'));
+    return nota === 0; // exactament 0, no absent
   });
+  _cache[k] = result;
+  return result;
 }
 
 function getSuplentPts(participant, fase, jornada) {
+  const k = `suppts_${participant}_${fase}_${jornada}`;
+  if (_cache[k] !== undefined) return _cache[k];
   const sup = getSuplent(participant, fase, jornada);
-  if (!sup) return 0;
-  if (!isSuplentActiu(participant, fase, jornada)) return 0;
+  if (!sup || !isSuplentActiu(participant, fase, jornada)) { _cache[k] = 0; return 0; }
   const sc = getScoreEfectiu(participant, v(sup,'Jugador'), fase, jornada);
-  return calcScoreRow(sc, v(sup,'Posicio'), v(sup,'Jugador'), fase, jornada, participant) || 0;
+  const result = calcScoreRow(sc, v(sup,'Posicio'), v(sup,'Jugador'), fase, jornada, participant) || 0;
+  _cache[k] = result;
+  return result;
 }
 
 // ── Entrenador ────────────────────────────────────────────────────────────────
@@ -1344,6 +1356,21 @@ function calcParticipantStat(participant, col) {
   return total;
 }
 
+function calcParticipantPhaseTotal(participant, ph) {
+  const k = `phasetotal_${participant}_${ph}`;
+  if (_cache[k] !== undefined) return _cache[k];
+  const result = (PHASE_JORNADES[ph]||[]).reduce((s, jorn) => {
+    const jornPlayers = getTitulars(participant, ph, jorn);
+    const titPts = jornPlayers.reduce((s2, pl) => {
+      const sc = getScoreEfectiu(participant, v(pl,'Jugador'), ph, jorn);
+      return s2 + (calcScoreRow(sc, v(pl,'Posicio'), v(pl,'Jugador'), ph, jorn, participant) || 0);
+    }, 0);
+    return s + titPts + getSuplentPts(participant, ph, jorn) + getEntrenadorPts(participant, ph, jorn);
+  }, 0);
+  _cache[k] = result;
+  return result;
+}
+
 function getRanking() {
   if (_cache.ranking) return _cache.ranking;
   _cache.ranking = getParticipants()
@@ -1357,19 +1384,7 @@ function getRanking() {
       assists: calcParticipantStat(p, 'Assistencies'),
       grogues: calcParticipantStat(p, 'DobleGroga'),
       vermelles: calcParticipantStat(p, 'Vermella'),
-      byPhase: PHASES.reduce((a, ph) => {
-        a[ph] = (PHASE_JORNADES[ph]||[]).reduce((s, jorn) => {
-          const jornPlayers = getPlayersForPhase(p, ph, jorn);
-          return s + jornPlayers.reduce((s2, pl) => {
-            const jugador = v(pl,'Jugador');
-            const pos = v(pl,'Posicio') || 'DAV';
-            const sc = getScoreEfectiu(p, jugador, ph, jorn);
-            const pts = calcScoreRow(sc, pos, jugador, ph, jorn, p);
-            return s2 + (pts || 0);
-          }, 0);
-        }, 0);
-        return a;
-      }, {})
+      byPhase: PHASES.reduce((a, ph) => { a[ph] = calcParticipantPhaseTotal(p, ph); return a; }, {})
     }))
     // Criteri principal: puntuació total (amb efectes). Empat ->
     // 1) puntuació crua (sense capità/cartes), 2) gols acumulats, 3) millor jugador individual
@@ -1716,7 +1731,9 @@ function assignarColumnes(cols, n) {
 }
 
 function renderPitch(participant, phase, jornada, tryJ1Fallback) {
-  const phasePlayers = getPlayersForPhase(participant, phase, jornada);
+  const allPhasePlayers = getPlayersForPhase(participant, phase, jornada);
+  // El SUP no va al camp — es mostra a la banqueta
+  const phasePlayers = allPhasePlayers.filter(pl => norm(getRolEfectiu(pl, phase, jornada)) !== 'sup');
 
   // Agrupa per posició genèrica (per al càlcul de punts) i per rol (per al visual)
   const byPos  = { POR:[], DEF:[], MIG:[], DAV:[] };
@@ -1828,8 +1845,8 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
   const totalStr = total > 0 ? `${total.toFixed(0)} pts` : 'Sense puntuació';
 
   // Separa titulars i suplent per a la llista
-  const titularsList = phasePlayers.filter(pl => norm(getRolEfectiu(pl, phase, jornada)) !== 'sup');
-  const suplentList  = phasePlayers.filter(pl => norm(getRolEfectiu(pl, phase, jornada)) === 'sup');
+  const titularsList = allPhasePlayers.filter(pl => norm(getRolEfectiu(pl, phase, jornada)) !== 'sup');
+  const suplentList  = allPhasePlayers.filter(pl => norm(getRolEfectiu(pl, phase, jornada)) === 'sup');
 
   const listRows = titularsList.map((pl, plIdx) => {
     const name = v(pl,'Jugador'), pos2orig = (v(pl,'Posicio')||'MIG').toUpperCase();
@@ -2160,49 +2177,46 @@ function _renderTeamFull() {
     pitchHtml = `<div class="empty-state"><div class="big-icon">⚠️</div><p>Error: ${e.message}</p></div>`;
   }
 
-  // ── Banqueta: suplent + entrenador ────────────────────────────────────────
+  // ── Banqueta: suplent (esquerra) + entrenador (dreta) ─────────────────────
   const supPl = getSuplent(participant, _activePhase, jornada);
   const supActiu = supPl ? isSuplentActiu(participant, _activePhase, jornada) : false;
   const supPts = supPl ? getSuplentPts(participant, _activePhase, jornada) : 0;
   const entPts = getEntrenadorPts(participant, _activePhase, jornada);
   const entInfo = getEntrenadorInfo(participant);
 
-  let benchHtml = '';
-  if (supPl || entInfo) {
-    const supSc = supPl ? getScore(participant, v(supPl,'Jugador'), _activePhase, jornada) : null;
-    const supNota = supSc ? parseNota(v(supSc,'Nota')) : null;
-    const supNotaCls = supNota===null?'score-empty':supNota>=8?'score-high':supNota>=6.5?'score-mid':'score-low';
-    const safeName = supPl ? esc(v(supPl,'Jugador')) : '';
-
-    const supPin = supPl ? `<div style="text-align:center;position:relative">
-      ${supActiu ? `<div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:#F59E0B;color:#050C1A;font-size:0.5rem;font-weight:800;padding:1px 6px;border-radius:8px;white-space:nowrap;font-family:'Space Mono',monospace;z-index:2">▶ ACTIU</div>` : ''}
-      <div style="position:relative;display:inline-block;cursor:pointer" onclick="openPlayerCard('${safeName}','${esc(participant)}','${_activePhase}','${jornada}')">
-        <div class="avatar" style="width:58px;height:58px;border:3px solid ${supActiu?'#F59E0B':'rgba(255,255,255,0.2)'};border-radius:50%;overflow:hidden;background:rgba(5,15,40,0.8);${supActiu?'box-shadow:0 0 16px rgba(245,158,11,0.6)':''}">
-          ${v(supPl,'Foto') ? `<img src="${v(supPl,'Foto')}" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<div style=font-size:1.4rem;display:flex;align-items:center;justify-content:center;height:100%>👤</div>'">` : `<div style="font-size:1.4rem;display:flex;align-items:center;justify-content:center;height:100%">👤</div>`}
-        </div>
-        <span class="score-chip ${supNotaCls}" style="position:absolute;top:-6px;right:-6px;font-size:0.65rem;padding:1px 5px">${supPts.toFixed(0)}</span>
-      </div>
-      <div class="pname" style="font-size:0.7rem;margin-top:4px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${supActiu?'#F59E0B':'var(--silver)'}">${v(supPl,'Jugador')}</div>
-      <div style="font-size:0.6rem;color:var(--silver);opacity:0.7">Suplent</div>
-    </div>` : '';
-
-    const entPin = entInfo ? `<div style="text-align:center">
+  const makeBenchPin = (foto, nom, pts, color, badge, rol) => {
+    const notaVal = pts;
+    return `<div style="text-align:center;min-width:70px">
       <div style="position:relative;display:inline-block">
-        <div style="width:58px;height:58px;border:3px solid rgba(96,165,250,0.4);border-radius:50%;overflow:hidden;background:rgba(5,15,40,0.8)">
-          ${v(entInfo,'Foto') ? `<img src="${v(entInfo,'Foto')}" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<div style=font-size:1.4rem;display:flex;align-items:center;justify-content:center;height:100%>🧑‍💼</div>'">` : `<div style="font-size:1.4rem;display:flex;align-items:center;justify-content:center;height:100%">🧑‍💼</div>`}
+        <div style="width:52px;height:52px;border-radius:50%;overflow:hidden;border:2.5px solid ${color};background:rgba(5,15,40,0.8);margin:0 auto;${badge?`box-shadow:0 0 14px ${color}40`:''}" ${nom?`onclick="openPlayerCard('${esc(nom)}','${esc(participant)}','${_activePhase}','${jornada}')" style="cursor:pointer;width:52px;height:52px;border-radius:50%;overflow:hidden;border:2.5px solid ${color};background:rgba(5,15,40,0.8);margin:0 auto;${badge?`box-shadow:0 0 14px ${color}40`:''}"`:''}>>
+          ${foto ? `<img src="${foto}" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<div style=font-size:1.2rem;display:flex;align-items:center;justify-content:center;height:100%;background:rgba(5,15,40,0.8)>${rol==='ent'?'🧑‍💼':'👤'}</div>'">` : `<div style="font-size:1.2rem;display:flex;align-items:center;justify-content:center;height:100%;background:rgba(5,15,40,0.8)">${rol==='ent'?'🧑‍💼':'👤'}</div>`}
         </div>
-        <span style="position:absolute;top:-6px;right:-6px;background:${entPts>=5?'rgba(74,222,128,0.9)':entPts>=2?'rgba(250,204,21,0.9)':'rgba(156,163,175,0.7)'};color:#050C1A;font-family:'Space Mono',monospace;font-size:0.65rem;font-weight:700;padding:1px 5px;border-radius:8px">${entPts.toFixed(0)}</span>
+        ${pts !== null ? `<span style="position:absolute;top:-5px;right:-8px;background:${color};color:#050C1A;font-family:'Space Mono',monospace;font-size:0.6rem;font-weight:800;padding:1px 5px;border-radius:8px">${typeof pts==='number'?pts.toFixed(0):pts}</span>` : ''}
       </div>
-      <div class="pname" style="font-size:0.7rem;margin-top:4px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#60A5FA">${v(entInfo,'Nom')||'Entrenador'}</div>
-      <div style="font-size:0.6rem;color:var(--silver);opacity:0.7">Entrenador</div>
-    </div>` : '';
-
-    benchHtml = `<div style="display:flex;justify-content:space-around;align-items:flex-start;padding:0.8rem 1rem;margin-top:0.5rem;background:rgba(5,15,40,0.4);border:1px solid rgba(30,100,220,0.15);border-radius:10px;border-top:2px solid rgba(30,100,220,0.2)">
-      <div style="font-size:0.6rem;color:var(--silver);writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:0.15em;text-transform:uppercase;opacity:0.5;align-self:center">Banqueta</div>
-      ${supPin}
-      ${entPin}
+      ${badge ? `<div style="font-family:'Space Mono',monospace;font-size:0.48rem;font-weight:800;color:${color};letter-spacing:0.05em;text-transform:uppercase;margin-top:2px">${badge}</div>` : '<div style="height:14px"></div>'}
+      <div style="font-size:0.67rem;color:var(--white);margin-top:2px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600">${nom||'—'}</div>
+      <div style="font-size:0.55rem;color:var(--silver);opacity:0.65;text-transform:uppercase;letter-spacing:0.08em">${rol==='ent'?'Entrenador':'Suplent'}</div>
     </div>`;
-  }
+  };
+
+  const supColor = supActiu ? '#F59E0B' : 'rgba(255,255,255,0.25)';
+  const supBadge = supActiu ? '▶ ACTIU' : '';
+  const supPin = supPl ? makeBenchPin(
+    v(supPl,'Foto'), v(supPl,'Jugador'), supActiu ? supPts : null,
+    supColor, supBadge, 'sup'
+  ) : `<div style="min-width:70px;text-align:center;opacity:0.3"><div style="width:52px;height:52px;border-radius:50%;border:2px dashed rgba(255,255,255,0.2);margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:1.2rem">👤</div><div style="font-size:0.55rem;color:var(--silver);margin-top:6px;text-transform:uppercase">Suplent</div></div>`;
+
+  const entColor = entPts >= 5 ? '#4ADE80' : entPts >= 2 ? '#FBBF24' : 'rgba(255,255,255,0.25)';
+  const entPin = entInfo ? makeBenchPin(
+    v(entInfo,'Foto'), v(entInfo,'Nom')||'Entrenador', entPts,
+    entColor, '', 'ent'
+  ) : `<div style="min-width:70px;text-align:center;opacity:0.3"><div style="width:52px;height:52px;border-radius:50%;border:2px dashed rgba(255,255,255,0.2);margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:1.2rem">🧑‍💼</div><div style="font-size:0.55rem;color:var(--silver);margin-top:6px;text-transform:uppercase">Entrenador</div></div>`;
+
+  const benchHtml = `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.7rem 1.5rem;background:rgba(5,15,40,0.5);border:1px solid rgba(30,100,220,0.15);border-top:2px solid rgba(30,100,220,0.2);border-radius:0 0 10px 10px;margin-top:-4px">
+    ${supPin}
+    <div style="font-family:'Space Mono',monospace;font-size:0.55rem;color:rgba(255,255,255,0.2);letter-spacing:0.2em;text-transform:uppercase;text-align:center">Banqueta</div>
+    ${entPin}
+  </div>`;
 
   view.innerHTML = `
     <div class="team-header"><div>
