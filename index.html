@@ -2238,13 +2238,7 @@ function _renderTeamFull() {
 
   // Phase tabs — sense càlcul de punts per fases no actives (massa pesat amb 8 jornades)
   const phaseTabs = PHASES.map(ph => {
-    const phTotal = (PHASE_JORNADES[ph]||[]).reduce((sum, jorn) => {
-      const jornPl = getPlayersForPhase(participant, ph, jorn);
-      return sum + jornPl.reduce((s,pl) => {
-        const sc = getScoreEfectiu(participant, v(pl,'Jugador'), ph, jorn);
-        return s + (calcScoreRow(sc, v(pl,'Posicio'), v(pl,'Jugador'), ph, jorn, participant) || 0);
-      }, 0) + getSuplentPts(participant, ph, jorn) + getEntrenadorPts(participant, ph, jorn);
-    }, 0);
+    const phTotal = calcParticipantPhaseTotal(participant, ph);
     const badge = phTotal > 0 ? `<span class="pts-badge">${phTotal.toFixed(0)}</span>` : '';
     const active = ph === _activePhase ? ' active' : '';
     return `<button class="phase-tab-btn${active}" onclick="selectPhase('${ph}')">${PHASE_ICONS[ph]} ${PHASE_LABELS[ph]}${badge}</button>`;
@@ -2257,7 +2251,8 @@ function _renderTeamFull() {
     jornHtml = '<div style="display:flex;gap:0;border-bottom:1px solid var(--glass-border);margin-bottom:1rem;flex-wrap:wrap">' +
       jornsActives.map(j => {
         const active = j === _activeJornada;
-        const jPlayers = getPlayersForPhase(participant, _activePhase, j);
+        // Punts de la jornada: titulars + suplent + entrenador
+        const jPlayers = getTitulars(participant, _activePhase, j);
         const jPts = jPlayers.reduce((s, pl) => {
           const sc = getScoreEfectiu(participant, v(pl,'Jugador'), _activePhase, j);
           return s + (calcScoreRow(sc, v(pl,'Posicio'), v(pl,'Jugador'), _activePhase, j, participant) || 0);
