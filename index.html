@@ -1003,7 +1003,7 @@ function getClubBadge(equip) {
   const img = escut
     ? `<img src="${escut}" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:3px;flex-shrink:0" onerror="this.style.display='none'">`
     : '';
-  return `<span style="display:inline-flex;align-items:center;background:rgba(30,100,220,0.18);border:1px solid rgba(74,159,255,0.25);color:rgba(255,255,255,0.85);font-size:0.6rem;font-weight:600;padding:1px 5px;border-radius:4px;font-family:'DM Sans',sans-serif;gap:2px;vertical-align:middle">${img}${nomCurt}</span>`;
+  return `<span style="display:inline-flex;align-items:center;background:#fff;border:1px solid rgba(0,0,0,0.12);color:#1a1a1a;font-size:0.6rem;font-weight:600;padding:1px 5px;border-radius:4px;font-family:'DM Sans',sans-serif;gap:2px;vertical-align:middle">${img}${nomCurt}</span>`;
 }
 
 // Compatibilitat: getCountryStyle → retorna null (ja no usem colors per país)
@@ -2144,6 +2144,7 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
       </div>
       ${badge?`<div style="font-size:0.48rem;font-weight:800;color:${color};letter-spacing:0.05em;text-transform:uppercase;margin-top:2px;font-family:'Space Mono',monospace">${badge}</div>`:`<div style="height:13px"></div>`}
       <div style="font-size:0.67rem;color:var(--white);margin-top:1px;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600">${nom||'—'}</div>
+      ${rol==='ent' && entInfoR && v(entInfoR,'Equip') ? `<div style="margin-top:2px">${getClubBadge(v(entInfoR,'Equip'))}</div>` : ''}
       <div style="font-size:0.52rem;color:var(--silver);opacity:0.6;text-transform:uppercase;letter-spacing:0.08em">${rol==='ent'?'Entrenador':'Suplent'}</div>
     </div>`;
 
