@@ -1733,9 +1733,12 @@ function playerPin(name, pos, sc, jorn, participant, phase) {
   // Use escaped participant name to avoid quote issues in onclick
   const safeParticipant = (participant||_activeParticipant).replace(/'/g, "\'");
   const safeName = name.replace(/'/g, "\'");
+  // Badge de l'equip — sota el nom, no sobre la foto
+  const clubBadgeBelow = plData ? getClubBadge(v(plData,'Equip')) : '';
   return `<div class="player-pin" onclick="openPlayerCard('${safeName}','${safeParticipant}','${phase}','${jorn}')" style="cursor:pointer">
-    <div class="avatar ${avCls}" style="overflow:visible;position:relative;transition:transform 0.15s" onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform=''">${innerHtml}${anulatBadgeZ}${scoreBubbleZ}${flagBadgeZ}${captainBadgeZ}${canviBadgeZ}${escutBadgeZ}</div>
+    <div class="avatar ${avCls}" style="overflow:visible;position:relative;transition:transform 0.15s" onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform=''">${innerHtml}${anulatBadgeZ}${scoreBubbleZ}${captainBadgeZ}${canviBadgeZ}${escutBadgeZ}</div>
     <div class="pname">${shortName}</div>
+    ${clubBadgeBelow ? `<div style="margin-top:1px;display:flex;justify-content:center">${clubBadgeBelow}</div>` : ''}
     ${goals}
   </div>`;
 }
@@ -2064,7 +2067,7 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
           ${(()=>{const ca=participant&&isListCapita&&!isListCap2&&isCapitaAnulat(participant, phase, jornada);const dm=(isListCapita&&participant)?getCapitaDisplayMult(participant, phase, jornada):(isListCap2?2:0);const isC2=isListCap2&&!isListCapita;if(dm>0)return `<span style="background:${ca?'rgba(245,200,66,0.3)':dm===3||isC2?'#22C55E':'var(--gold)'};color:var(--ink);font-family:'Bebas Neue',cursive;font-size:0.55rem;padding:1px 5px;border-radius:10px;margin-left:4px">${ca?'🚫 ':isC2?'🟢 ':'⭐ '}${isC2?'2n Capità x2':dm===3?'Capità x3':'Capità x2'}${ca?' ANULAT':''}</span>`;return '';})()}
           ${isListAnulat?`<span style="background:rgba(248,113,113,0.2);color:#F87171;font-size:0.6rem;padding:1px 5px;border-radius:10px;margin-left:4px">🚫</span>`:''}
           ${isListBlinded?`<span style="background:rgba(56,189,248,0.2);color:#38BDF8;font-size:0.6rem;padding:1px 5px;border-radius:10px;margin-left:4px">🛡️ Blindat</span>`:''}
-          <small>${flag2} ${v(pl,'Equip')}</small>
+          <small>${flag2}</small>
         </div>
       </div>
       <div class="pitch-list-note">
@@ -2101,7 +2104,7 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
           <span style="font-weight:700;color:${supColor}">${name}</span>
           <span class="pos-badge pos-${pos2orig}" style="margin-left:4px">${pos2orig}</span>
           ${supActiuList?`<span style="background:#F59E0B;color:#050C1A;font-size:0.55rem;font-weight:800;padding:1px 6px;border-radius:8px;margin-left:4px">▶ ACTIU</span>`:''}
-          <small>${flag2} ${v(pl,'Equip')}</small>
+          <small>${flag2}</small>
         </div>
       </div>
       <div class="pitch-list-note"><span class="score-chip ${noJugat2?'score-low':cls2}">${noJugat2?'😴':(note2!==null?note2.toFixed(1):'—')}</span></div>
@@ -2772,7 +2775,7 @@ function renderIdeal11Tab() {
         ${avatarList}
         <div>
           ${p.name}<span class="pos-badge ${posClass}" style="margin-left:6px">${p.pos}</span>
-          <small>${flag2} ${p.equip}</small>
+          <small>${flag2}</small>
         </div>
       </div>
       <div class="pitch-list-note"><span class="score-chip ${noJugat2?'score-low':cls2}">${noJugat2?'😴':(nota!==null?nota.toFixed(1):'—')}</span></div>
