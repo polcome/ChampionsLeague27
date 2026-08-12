@@ -5,12 +5,6 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1E90FF">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="UCL Fantasy">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Champions League 26/27 — Fantasy League</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -2353,14 +2347,15 @@ function renderJornades(phase, jorn) {
   if (!participants.length) { viewEl.innerHTML = '<div class="empty-state"><div class="big-icon">📅</div><p>Afegeix dades al Google Sheet.</p></div>'; return; }
   // Usa el mateix sistema de càlcul que la classificació (calcScoreRow amb efectes de capità/cartes)
   const ranked = participants.map(p => {
-    const players = getPlayersForPhase(p, phase, jorn);
-    const pts = players.reduce((sum, pl) => {
+    const players = getTitulars(p, phase, jorn);
+    const ptsTitulars = players.reduce((sum, pl) => {
       const name = v(pl,'Jugador');
       const pos  = v(pl,'Posicio');
       const sc = getScoreEfectiu(p, name, phase, jorn);
       const pts2 = calcScoreRow(sc, pos, name, phase, jorn, p);
       return sum + (pts2 || 0);
     }, 0);
+    const pts = ptsTitulars + getSuplentPts(p, phase, jorn) + getEntrenadorPts(p, phase, jorn);
     return {name: p, pts};
   }).sort((a,b) => b.pts - a.pts);
   viewEl.innerHTML = `<div class="ranking-grid">${ranked.map((r,i) => `
@@ -4302,17 +4297,17 @@ function showToast(msg) {
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwe7egYwCGNeAWMKQEW8g7ncGlg3XPIP4HMJy6f8Bp9gz7n4HmfM1713uQMLu8nxGYv/exec';
 
 const R_PASSWORDS = {
-  'NTNP':              'ntnp1302',
   'MBEMBA':            'siesta1999',
-  'PAPALUUKAS FC':     'Papi1234@',
+  'NTNP':              'ntnp1302',
   'TETPEÑA':           'APG',
+  'PAPALUUKAS FC':     'Papi1234@',
   'POLILLAS':          'polfantasy1',
-  'FERGRAM FC':        'Ferranqr21',
-  'AGUTROT CF':           'policho1234',
+  'BICHOS FC':         '',
+  'AGUTROT CF':        'policho1234',
   'COCODRILS':         'Bandana123',
   'ADAMROSVIKOVIC69':  'Fantasy123',
   'FC SAVERIUS':       'waterpolo7034',
-  'THEMARKMACK':       'Messi10',
+  'SR GAMI':           '',
 };
 
 
@@ -4984,19 +4979,19 @@ function getJugadorEfectiu(participant, jugador, fase, jornada) {
 // ============================================================
 // CARTES UI
 // ============================================================
-const C_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzChU0LpTDGrqsUEdWbwpcPlK--Ci7RI6G1cuja8p7Jn63rBuGcdPvDj7j47_iMeSOMPA/exec';
+const C_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwe7egYwCGNeAWMKQEW8g7ncGlg3XPIP4HMJy6f8Bp9gz7n4HmfM1713uQMLu8nxGYv/exec';
 const C_PASSWORDS = {
-  'NTNP':              'ntnp1302',
   'MBEMBA':            'siesta1999',
-  'PAPALUUKAS FC':     'Papi1234@',
+  'NTNP':              'ntnp1302',
   'TETPEÑA':           'APG',
+  'PAPALUUKAS FC':     'Papi1234@',
   'POLILLAS':          'polfantasy1',
-  'FERGRAM FC':        'Ferranqr21',
-  'AGUTROT CF':           'policho1234',
+  'BICHOS FC':         '',
+  'AGUTROT CF':        'policho1234',
   'COCODRILS':         'Bandana123',
   'ADAMROSVIKOVIC69':  'Fantasy123',
   'FC SAVERIUS':       'waterpolo7034',
-  'THEMARKMACK':       'Messi10',
+  'SR GAMI':           '',
 };
 const CARTES_DEF = {
   'Capita x3':          {icon:'👑',color:'#F5C842',desc:'El teu capità puntua ×3 durant la jornada activa.',accio:'capita_x4'},
@@ -5853,11 +5848,6 @@ async function init() {
 }
 
 init();
-</script>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
-}
 </script>
 </body>
 </html>
