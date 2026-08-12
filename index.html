@@ -2864,7 +2864,7 @@ function statsSelectChange(val) { selectStats(val); }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function statsPtsJornada(participant, fase, jornada) {
-  const players = getPlayersForPhase(participant, fase, jornada);
+  const players = getTitulars(participant, fase, jornada);
   let total = 0;
   for (const pl of players) {
     const sc = getScoreEfectiu(participant, v(pl,'Jugador'), fase, jornada);
@@ -2872,6 +2872,8 @@ function statsPtsJornada(participant, fase, jornada) {
     const pos = v(pl,'Posicio') || v(sc,'Posicio') || 'DAV';
     total += calcScoreRow(sc, pos, v(pl,'Jugador'), fase, jornada, participant) || 0;
   }
+  total += getSuplentPts(participant, fase, jornada);
+  total += getEntrenadorPts(participant, fase, jornada);
   return total;
 }
 
@@ -3275,6 +3277,53 @@ function renderStatsEquip(participant, participants) {
     <div style="font-family:'Bebas Neue',cursive;font-size:1rem;letter-spacing:0.08em;color:var(--gold);margin-bottom:0.6rem">📈 Evolució a la classificació</div>
     ${statsEvolutionChart(participant,participants)}
   </div>`;
+
+  // Secció entrenador
+  const entJornades = _entrenadors.filter(r => norm(v(r,'Participant'))===norm(participant));
+  if (entJornades.length > 0) {
+    const entTotal = entJornades.reduce((s,r) => s + (parseFloat(v(r,'Punts'))||0), 0);
+    const entInfo2 = getEntrenadorInfo(participant);
+    const entNom = entInfo2 ? (v(entInfo2,'Nom')||'Entrenador') : 'Entrenador';
+    const entFoto = entInfo2 ? v(entInfo2,'Foto') : '';
+    const entEquip2 = entInfo2 ? v(entInfo2,'Equip') : '';
+    const vict = entJornades.filter(r=>(parseFloat(v(r,'Punts'))||0)>=5).length;
+    const emp  = entJornades.filter(r=>(parseFloat(v(r,'Punts'))||0)===2).length;
+    const der  = entJornades.filter(r=>(parseFloat(v(r,'Punts'))||0)===0).length;
+    html+=`<div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;padding:1rem;margin-bottom:1.2rem">
+      <div style="font-family:'Bebas Neue',cursive;font-size:1rem;letter-spacing:0.08em;color:#60A5FA;margin-bottom:0.8rem">🧑‍💼 Entrenador</div>
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.8rem">
+        ${entFoto?`<img src="${entFoto}" style="width:50px;height:50px;border-radius:50%;object-fit:cover;border:2px solid #60A5FA" onerror="this.style.display='none'">`:
+          `<div style="width:50px;height:50px;border-radius:50%;background:rgba(96,165,250,0.2);display:flex;align-items:center;justify-content:center;font-size:1.5rem">🧑‍💼</div>`}
+        <div>
+          <div style="font-weight:700;font-size:1rem">${entNom}</div>
+          ${entEquip2?`<div style="margin-top:2px">${getClubBadge(entEquip2)}</div>`:''}
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-family:'Bebas Neue',cursive;font-size:1.8rem;color:var(--gold)">${entTotal.toFixed(0)}</div>
+          <div style="font-size:0.7rem;color:var(--silver)">pts totals</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:0.8rem;flex-wrap:wrap;margin-bottom:0.8rem">
+        <span style="background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.3);color:#4ADE80;padding:3px 10px;border-radius:8px;font-size:0.8rem">🏆 ${vict} victòries</span>
+        <span style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#FBBF24;padding:3px 10px;border-radius:8px;font-size:0.8rem">🤝 ${emp} empats</span>
+        <span style="background:rgba(248,113,113,0.15);border:1px solid rgba(248,113,113,0.3);color:#F87171;padding:3px 10px;border-radius:8px;font-size:0.8rem">❌ ${der} derrotes</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0.3rem">
+        ${entJornades.map(r => {
+          const pts2 = parseFloat(v(r,'Punts'))||0;
+          const fase2 = v(r,'Fase'); const jorn2 = v(r,'Jornada');
+          const lbl = `${PHASE_LABELS[norm(fase2)]||fase2} ${jorn2.toUpperCase()}`;
+          const res = pts2>=5?'🏆 Victòria':pts2>=2?'🤝 Empat':'❌ Derrota';
+          const col = pts2>=5?'#4ADE80':pts2>=2?'#FBBF24':'#F87171';
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0.6rem;background:rgba(255,255,255,0.03);border-radius:6px">
+            <span style="font-size:0.82rem">${lbl}</span>
+            <span style="font-size:0.8rem;color:${col}">${res}</span>
+            <span style="font-family:'Space Mono',monospace;font-size:0.82rem;color:${col};font-weight:700">${pts2>=0?'+':''}${pts2} pts</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  } // fi secció entrenador
 
   // Puntuació per jornada (desplegable)
   html+=`<div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;padding:1rem;margin-bottom:1.2rem">
