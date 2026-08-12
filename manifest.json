@@ -1,0 +1,25 @@
+{
+  "name": "Champions League Fantasy 26/27",
+  "short_name": "UCL Fantasy",
+  "description": "Fantasy League de la Champions League 2026/27",
+  "start_url": "/ChampionsLeague27/",
+  "scope": "/ChampionsLeague27/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050C1A",
+  "theme_color": "#1E90FF",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
