@@ -1934,13 +1934,22 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
     return `<div class="pitch-row ${rowClass}">${pins}</div>`;
   }
 
-  // Total de la jornada/eliminatòria
-  const total = phasePlayers.reduce((s,pl) => {
-    let sc = getScoreEfectiu(participant, v(pl,'Jugador'), phase, jornada);
-    if (!sc && tryJ1Fallback && jornada === 'A') sc = getScoreEfectiu(participant, v(pl,'Jugador'), phase, 'J1');
-    const pts = calcScoreRow(sc, v(pl,'Posicio'), v(pl,'Jugador'), phase, jornada, participant);
-    return s + (pts || 0);
-  }, 0);
+  // Total de la jornada — usa la mateixa funció que tots els altres llocs
+  // (titulars amb cartes/capitans + suplent + entrenador + quiniela)
+  const total = (() => {
+    const titPts = phasePlayers
+      .filter(pl => norm(getRolEfectiu(pl, phase, jornada)) !== 'sup')
+      .reduce((s,pl) => {
+        let sc = getScoreEfectiu(participant, v(pl,'Jugador'), phase, jornada);
+        if (!sc && tryJ1Fallback && jornada === 'A') sc = getScoreEfectiu(participant, v(pl,'Jugador'), phase, 'J1');
+        const pts = calcScoreRow(sc, v(pl,'Posicio'), v(pl,'Jugador'), phase, jornada, participant);
+        return s + (pts || 0);
+      }, 0);
+    return titPts
+      + getSuplentPts(participant, phase, jornada)
+      + getEntrenadorPts(participant, phase, jornada)
+      + getQuinielaPts(participant, phase, jornada);
+  })();
   const totalStr = total > 0 ? `${total.toFixed(0)} pts` : 'Sense puntuació';
 
   // Separa titulars i suplent per a la llista
@@ -2403,14 +2412,18 @@ function renderJornades(phase, jorn) {
   if (!participants.length) { viewEl.innerHTML = '<div class="empty-state"><div class="big-icon">📅</div><p>Afegeix dades al Google Sheet.</p></div>'; return; }
   // Usa el mateix sistema de càlcul que la classificació (calcScoreRow amb efectes de capità/cartes)
   const ranked = participants.map(p => {
-    const players = getPlayersForPhase(p, phase, jorn);
-    const pts = players.reduce((sum, pl) => {
+    const players = getTitulars(p, phase, jorn);
+    const ptsTitulars = players.reduce((sum, pl) => {
       const name = v(pl,'Jugador');
       const pos  = v(pl,'Posicio');
       const sc = getScoreEfectiu(p, name, phase, jorn);
       const pts2 = calcScoreRow(sc, pos, name, phase, jorn, p);
       return sum + (pts2 || 0);
     }, 0);
+    const pts = ptsTitulars
+      + getSuplentPts(p, phase, jorn)
+      + getEntrenadorPts(p, phase, jorn)
+      + getQuinielaPts(p, phase, jorn);
     return {name: p, pts};
   }).sort((a,b) => b.pts - a.pts);
   viewEl.innerHTML = `<div class="ranking-grid">${ranked.map((r,i) => `
@@ -4144,55 +4157,55 @@ function quinielaSeleccionar(key, val) {
 }
 
 async function quinielaEnviar(fase, jorn) {
-  const statusEl = document.getElementById('quinielaStatus');
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--silver)">⏳ Enviant...</span>';
+  const el = document.getElementById('quinielaContent');
   const p = _quinielaParticipant;
+
+  // Mostra enviant...
+  const btnEl = el.querySelector('button.btn-gold');
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Enviant...'; }
 
   const partits = _quinielaData.filter(r =>
     norm(v(r,'Fase'))===norm(fase) && norm(v(r,'Jornada'))===norm(jorn)
   );
 
-  let errors = 0;
-  for (const r of partits) {
+  // Construeix les seleccions (prioritza locals sobre les del Sheet)
+  const seleccions = partits.map(r => {
     const local = v(r,'Local'); const visitant = v(r,'Visitant');
     const key = `${local}_${visitant}`;
-    const sel = _quinielaSeleccions[key] || v(r,p) || '';
-    if (!sel) continue;
-    try {
-      const url = `${SCRIPT_URL}?action=set_quiniela&participant=${encodeURIComponent(p)}&fase=${encodeURIComponent(fase)}&jornada=${encodeURIComponent(jorn)}&local=${encodeURIComponent(local)}&visitant=${encodeURIComponent(visitant)}&seleccio=${encodeURIComponent(sel)}`;
-      await fetch(url, {mode:'no-cors'});
-    } catch(e) { errors++; }
+    return {
+      local, visitant,
+      sel: _quinielaSeleccions[key] || v(r,p) || ''
+    };
+  }).filter(s => s.sel);
+
+  // UNA SOLA CRIDA amb totes les seleccions en JSON
+  try {
+    const url = `${SCRIPT_URL}?action=set_quiniela_bulk&participant=${encodeURIComponent(p)}&fase=${encodeURIComponent(fase)}&jornada=${encodeURIComponent(jorn)}&data=${encodeURIComponent(JSON.stringify(seleccions))}`;
+    await fetch(url, {mode:'no-cors'});
+  } catch(e) {
+    console.warn('Quiniela enviar error:', e);
   }
 
-  // Neteja seleccions locals i cache de quiniela
+  // Neteja i mostra confirmació
   _quinielaSeleccions = {};
-  // Esborra cache de quiniela per forçar recàlcul de punts
   Object.keys(_cache).filter(k => k.startsWith('quiniela_')).forEach(k => delete _cache[k]);
-
-  // Recarrega les dades del Sheet
   await loadQuinielaData();
-
-  // Redirigeix al login perquè un altre participant pugui entrar
   _quinielaAuth = false;
   _quinielaParticipant = null;
 
-  const el = document.getElementById('quinielaContent');
   const jornLabel = `${PHASE_LABELS[norm(fase)]||fase} ${jorn?.toUpperCase()||''}`;
-  const partitsActualitzats = _quinielaData.filter(r =>
+  const partitsAct = _quinielaData.filter(r =>
     norm(v(r,'Fase'))===norm(fase) && norm(v(r,'Jornada'))===norm(jorn)
   );
-  const selsFets = partitsActualitzats.map(r => ({
-    local: v(r,'Local'), visitant: v(r,'Visitant'), sel: v(r,p)||'?'
-  }));
 
   el.innerHTML = `<div style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.4);border-radius:12px;padding:1.2rem;margin-bottom:1.2rem;text-align:center">
     <div style="font-size:1.5rem;margin-bottom:0.4rem">✅</div>
     <div style="font-weight:700;color:#4ADE80;font-size:1rem;margin-bottom:0.4rem">Quiniela enviada!</div>
     <div style="font-size:0.82rem;color:var(--silver);margin-bottom:0.8rem">La teva quiniela per a <strong style="color:var(--white)">${jornLabel}</strong> és:</div>
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:center;margin-bottom:0.8rem">
-      ${selsFets.map(s=>`<span style="background:rgba(30,100,220,0.2);border:1px solid rgba(74,159,255,0.3);padding:3px 10px;border-radius:8px;font-family:'Space Mono',monospace;font-size:0.8rem"><strong>${s.local} - ${s.visitant}</strong>: <strong style="color:#4A9FFF">${s.sel}</strong></span>`).join('')}
+      ${partitsAct.map(r=>{const sel=v(r,p)||'?';return`<span style="background:rgba(30,100,220,0.2);border:1px solid rgba(74,159,255,0.3);padding:3px 10px;border-radius:8px;font-family:'Space Mono',monospace;font-size:0.8rem"><strong>${v(r,'Local')} - ${v(r,'Visitant')}</strong>: <strong style="color:#4A9FFF">${sel}</strong></span>`;}).join('')}
     </div>
-    <div style="font-size:0.75rem;color:var(--silver);opacity:0.7">⚠️ Un cop enviada no es pot modificar (tret que l'admin ho esborri manualment).</div>
+    <div style="font-size:0.75rem;color:var(--silver);opacity:0.7">⚠️ Un cop enviada no es pot modificar.</div>
   </div>
   <div style="text-align:center"><button class="btn-gold" onclick="renderQuinielaTab()">Entrar amb un altre participant</button></div>`;
 }
