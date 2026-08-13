@@ -3958,34 +3958,26 @@ function renderQuinielaTab() {
   const el = document.getElementById('quinielaContent');
   if (!gData) { el.innerHTML = '<p style="color:var(--silver);padding:1rem">Carregant...</p>'; return; }
 
-  // Si no tenim dades de quiniela, les carreguem
-  if (!_quinielaData.length) {
-    loadQuinielaData().then(() => renderQuinielaTab());
-    return;
-  }
+  // Sempre recarrega les dades al obrir la pestanya (per tenir resultats i seleccions actualitzades)
+  el.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Carregant quiniela...</p></div>';
+  loadQuinielaData().then(() => {
+    const fase = FASE_ACTIVA_GLOBAL || PHASES[0];
+    const jorn = JORNADA_ACTIVA_GLOBAL || PHASE_JORNADES[fase]?.[0];
+    const partits = _quinielaData.filter(r =>
+      norm(v(r,'Fase')) === norm(fase) && norm(v(r,'Jornada')) === norm(jorn)
+    );
+    const jornLabel = `${PHASE_LABELS[fase]||fase} ${jorn?.toUpperCase()||''}`;
 
-  // Partits de la jornada activa
-  const fase = FASE_ACTIVA_GLOBAL || PHASES[0];
-  const jorn = JORNADA_ACTIVA_GLOBAL || PHASE_JORNADES[fase]?.[0];
-  const partits = _quinielaData.filter(r =>
-    norm(v(r,'Fase')) === norm(fase) && norm(v(r,'Jornada')) === norm(jorn)
-  );
-
-  if (!partits.length) {
-    el.innerHTML = `<div class="empty-state"><div class="big-icon">🎯</div><p>No hi ha partits de quiniela per a ${PHASE_LABELS[fase]||fase} ${jorn?.toUpperCase()||''}.</p><p style="font-size:0.8rem;opacity:0.6">Afegeix els partits al Sheet "Quiniela".</p></div>`;
-    return;
-  }
-
-  // Selecció de jornada activa
-  const jornLabel = `${PHASE_LABELS[fase]||fase} ${jorn?.toUpperCase()||''}`;
-
-  // Login si no autenticat
-  if (!_quinielaAuth || !_quinielaParticipant) {
-    el.innerHTML = quinielaLogin(jornLabel);
-    return;
-  }
-
-  renderQuinielaNominated(el, partits, fase, jorn, jornLabel);
+    if (!partits.length) {
+      el.innerHTML = `<div class="empty-state"><div class="big-icon">🎯</div><p>No hi ha partits de quiniela per a ${jornLabel}.</p><p style="font-size:0.8rem;opacity:0.6">Afegeix els partits al Sheet "Quiniela".</p></div>`;
+      return;
+    }
+    if (!_quinielaAuth || !_quinielaParticipant) {
+      el.innerHTML = quinielaLogin(jornLabel);
+      return;
+    }
+    renderQuinielaNominated(el, partits, fase, jorn, jornLabel);
+  });
 }
 
 function quinielaLogin(jornLabel) {
@@ -4153,11 +4145,9 @@ function quinielaSeleccionar(key, val) {
 
 async function quinielaEnviar(fase, jorn) {
   const statusEl = document.getElementById('quinielaStatus');
-  if (statusEl) statusEl.textContent = 'Enviant...';
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--silver)">⏳ Enviant...</span>';
   const p = _quinielaParticipant;
 
-  // Prepara la data per enviar al Sheet
-  // Per cada partit, actualitza la columna del participant
   const partits = _quinielaData.filter(r =>
     norm(v(r,'Fase'))===norm(fase) && norm(v(r,'Jornada'))===norm(jorn)
   );
@@ -4170,14 +4160,41 @@ async function quinielaEnviar(fase, jorn) {
     if (!sel) continue;
     try {
       const url = `${SCRIPT_URL}?action=set_quiniela&participant=${encodeURIComponent(p)}&fase=${encodeURIComponent(fase)}&jornada=${encodeURIComponent(jorn)}&local=${encodeURIComponent(local)}&visitant=${encodeURIComponent(visitant)}&seleccio=${encodeURIComponent(sel)}`;
-      const res = await fetch(url, {mode:'no-cors'});
+      await fetch(url, {mode:'no-cors'});
     } catch(e) { errors++; }
   }
 
-  if (statusEl) statusEl.textContent = errors ? '⚠️ Alguna selecció no s\'ha pogut enviar.' : '✅ Quiniela enviada correctament!';
-  // Recarrega les dades
+  // Neteja seleccions locals i cache de quiniela
+  _quinielaSeleccions = {};
+  // Esborra cache de quiniela per forçar recàlcul de punts
+  Object.keys(_cache).filter(k => k.startsWith('quiniela_')).forEach(k => delete _cache[k]);
+
+  // Recarrega les dades del Sheet
   await loadQuinielaData();
-  renderQuinielaTab();
+
+  // Redirigeix al login perquè un altre participant pugui entrar
+  _quinielaAuth = false;
+  _quinielaParticipant = null;
+
+  const el = document.getElementById('quinielaContent');
+  const jornLabel = `${PHASE_LABELS[norm(fase)]||fase} ${jorn?.toUpperCase()||''}`;
+  const partitsActualitzats = _quinielaData.filter(r =>
+    norm(v(r,'Fase'))===norm(fase) && norm(v(r,'Jornada'))===norm(jorn)
+  );
+  const selsFets = partitsActualitzats.map(r => ({
+    local: v(r,'Local'), visitant: v(r,'Visitant'), sel: v(r,p)||'?'
+  }));
+
+  el.innerHTML = `<div style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.4);border-radius:12px;padding:1.2rem;margin-bottom:1.2rem;text-align:center">
+    <div style="font-size:1.5rem;margin-bottom:0.4rem">✅</div>
+    <div style="font-weight:700;color:#4ADE80;font-size:1rem;margin-bottom:0.4rem">Quiniela enviada!</div>
+    <div style="font-size:0.82rem;color:var(--silver);margin-bottom:0.8rem">La teva quiniela per a <strong style="color:var(--white)">${jornLabel}</strong> és:</div>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:center;margin-bottom:0.8rem">
+      ${selsFets.map(s=>`<span style="background:rgba(30,100,220,0.2);border:1px solid rgba(74,159,255,0.3);padding:3px 10px;border-radius:8px;font-family:'Space Mono',monospace;font-size:0.8rem"><strong>${s.local} - ${s.visitant}</strong>: <strong style="color:#4A9FFF">${s.sel}</strong></span>`).join('')}
+    </div>
+    <div style="font-size:0.75rem;color:var(--silver);opacity:0.7">⚠️ Un cop enviada no es pot modificar (tret que l'admin ho esborri manualment).</div>
+  </div>
+  <div style="text-align:center"><button class="btn-gold" onclick="renderQuinielaTab()">Entrar amb un altre participant</button></div>`;
 }
 
 // Contrasenyes de la Quiniela (iguals que les de Cartes/Ruleta)
