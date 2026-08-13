@@ -494,10 +494,11 @@
   <button class="tab-btn" data-tab="jornades">📅 Jornades</button>
   <button class="tab-btn" data-tab="jugadors">⚽ Jugadors</button>
   <button class="tab-btn" data-tab="ideal11">🌟 11 Ideals</button>
-  <button class="tab-btn" data-tab="stats">📊 Stats</button>
+  <!-- Stats desactivat temporalment: <button class="tab-btn" data-tab="stats">📊 Stats</button> -->
   <button class="tab-btn" data-tab="canvis">🔄 Canvis</button>
   <button class="tab-btn" data-tab="ruleta">⭐ Capità</button>
   <button class="tab-btn" data-tab="cartes">🃏 Carta</button>
+  <button class="tab-btn" data-tab="quiniela">🎯 Quiniela</button>
   <button class="tab-btn admin-tab" data-tab="admin" id="adminTabBtn">⚙️ Admin</button>
 </nav>
 
@@ -588,6 +589,11 @@
 
   <section class="section" id="tab-cartes">
     <div id="cartesTabContent"></div>
+  </section>
+
+  <section class="section" id="tab-quiniela">
+    <div class="section-title">🎯 Quiniela</div>
+    <div id="quinielaContent"><div class="loading-state"><div class="spinner"></div><p>Carregant...</p></div></div>
   </section>
 
   <section class="section" id="tab-admin">
@@ -2347,15 +2353,14 @@ function renderJornades(phase, jorn) {
   if (!participants.length) { viewEl.innerHTML = '<div class="empty-state"><div class="big-icon">📅</div><p>Afegeix dades al Google Sheet.</p></div>'; return; }
   // Usa el mateix sistema de càlcul que la classificació (calcScoreRow amb efectes de capità/cartes)
   const ranked = participants.map(p => {
-    const players = getTitulars(p, phase, jorn);
-    const ptsTitulars = players.reduce((sum, pl) => {
+    const players = getPlayersForPhase(p, phase, jorn);
+    const pts = players.reduce((sum, pl) => {
       const name = v(pl,'Jugador');
       const pos  = v(pl,'Posicio');
       const sc = getScoreEfectiu(p, name, phase, jorn);
       const pts2 = calcScoreRow(sc, pos, name, phase, jorn, p);
       return sum + (pts2 || 0);
     }, 0);
-    const pts = ptsTitulars + getSuplentPts(p, phase, jorn) + getEntrenadorPts(p, phase, jorn);
     return {name: p, pts};
   }).sort((a,b) => b.pts - a.pts);
   viewEl.innerHTML = `<div class="ranking-grid">${ranked.map((r,i) => `
@@ -2864,7 +2869,7 @@ function statsSelectChange(val) { selectStats(val); }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function statsPtsJornada(participant, fase, jornada) {
-  const players = getTitulars(participant, fase, jornada);
+  const players = getPlayersForPhase(participant, fase, jornada);
   let total = 0;
   for (const pl of players) {
     const sc = getScoreEfectiu(participant, v(pl,'Jugador'), fase, jornada);
@@ -2872,8 +2877,6 @@ function statsPtsJornada(participant, fase, jornada) {
     const pos = v(pl,'Posicio') || v(sc,'Posicio') || 'DAV';
     total += calcScoreRow(sc, pos, v(pl,'Jugador'), fase, jornada, participant) || 0;
   }
-  total += getSuplentPts(participant, fase, jornada);
-  total += getEntrenadorPts(participant, fase, jornada);
   return total;
 }
 
@@ -3277,53 +3280,6 @@ function renderStatsEquip(participant, participants) {
     <div style="font-family:'Bebas Neue',cursive;font-size:1rem;letter-spacing:0.08em;color:var(--gold);margin-bottom:0.6rem">📈 Evolució a la classificació</div>
     ${statsEvolutionChart(participant,participants)}
   </div>`;
-
-  // Secció entrenador
-  const entJornades = _entrenadors.filter(r => norm(v(r,'Participant'))===norm(participant));
-  if (entJornades.length > 0) {
-    const entTotal = entJornades.reduce((s,r) => s + (parseFloat(v(r,'Punts'))||0), 0);
-    const entInfo2 = getEntrenadorInfo(participant);
-    const entNom = entInfo2 ? (v(entInfo2,'Nom')||'Entrenador') : 'Entrenador';
-    const entFoto = entInfo2 ? v(entInfo2,'Foto') : '';
-    const entEquip2 = entInfo2 ? v(entInfo2,'Equip') : '';
-    const vict = entJornades.filter(r=>(parseFloat(v(r,'Punts'))||0)>=5).length;
-    const emp  = entJornades.filter(r=>(parseFloat(v(r,'Punts'))||0)===2).length;
-    const der  = entJornades.filter(r=>(parseFloat(v(r,'Punts'))||0)===0).length;
-    html+=`<div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;padding:1rem;margin-bottom:1.2rem">
-      <div style="font-family:'Bebas Neue',cursive;font-size:1rem;letter-spacing:0.08em;color:#60A5FA;margin-bottom:0.8rem">🧑‍💼 Entrenador</div>
-      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.8rem">
-        ${entFoto?`<img src="${entFoto}" style="width:50px;height:50px;border-radius:50%;object-fit:cover;border:2px solid #60A5FA" onerror="this.style.display='none'">`:
-          `<div style="width:50px;height:50px;border-radius:50%;background:rgba(96,165,250,0.2);display:flex;align-items:center;justify-content:center;font-size:1.5rem">🧑‍💼</div>`}
-        <div>
-          <div style="font-weight:700;font-size:1rem">${entNom}</div>
-          ${entEquip2?`<div style="margin-top:2px">${getClubBadge(entEquip2)}</div>`:''}
-        </div>
-        <div style="margin-left:auto;text-align:right">
-          <div style="font-family:'Bebas Neue',cursive;font-size:1.8rem;color:var(--gold)">${entTotal.toFixed(0)}</div>
-          <div style="font-size:0.7rem;color:var(--silver)">pts totals</div>
-        </div>
-      </div>
-      <div style="display:flex;gap:0.8rem;flex-wrap:wrap;margin-bottom:0.8rem">
-        <span style="background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.3);color:#4ADE80;padding:3px 10px;border-radius:8px;font-size:0.8rem">🏆 ${vict} victòries</span>
-        <span style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#FBBF24;padding:3px 10px;border-radius:8px;font-size:0.8rem">🤝 ${emp} empats</span>
-        <span style="background:rgba(248,113,113,0.15);border:1px solid rgba(248,113,113,0.3);color:#F87171;padding:3px 10px;border-radius:8px;font-size:0.8rem">❌ ${der} derrotes</span>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:0.3rem">
-        ${entJornades.map(r => {
-          const pts2 = parseFloat(v(r,'Punts'))||0;
-          const fase2 = v(r,'Fase'); const jorn2 = v(r,'Jornada');
-          const lbl = `${PHASE_LABELS[norm(fase2)]||fase2} ${jorn2.toUpperCase()}`;
-          const res = pts2>=5?'🏆 Victòria':pts2>=2?'🤝 Empat':'❌ Derrota';
-          const col = pts2>=5?'#4ADE80':pts2>=2?'#FBBF24':'#F87171';
-          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0.6rem;background:rgba(255,255,255,0.03);border-radius:6px">
-            <span style="font-size:0.82rem">${lbl}</span>
-            <span style="font-size:0.8rem;color:${col}">${res}</span>
-            <span style="font-family:'Space Mono',monospace;font-size:0.82rem;color:${col};font-weight:700">${pts2>=0?'+':''}${pts2} pts</span>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`;
-  } // fi secció entrenador
 
   // Puntuació per jornada (desplegable)
   html+=`<div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;padding:1rem;margin-bottom:1.2rem">
@@ -3928,6 +3884,243 @@ function checkAdminPass() {
   }
 }
 
+// ============================================================
+// QUINIELA
+// ============================================================
+let _quinielaData = []; // dades del Sheet Quiniela
+let _quinielaParticipant = null;
+let _quinielaAuth = false;
+
+async function loadQuinielaData() {
+  try {
+    _quinielaData = await fetchSheet('Quiniela').then(parseSheet);
+  } catch(e) {
+    console.warn('Quiniela:', e);
+    _quinielaData = [];
+  }
+}
+
+function renderQuinielaTab() {
+  const el = document.getElementById('quinielaContent');
+  if (!gData) { el.innerHTML = '<p style="color:var(--silver);padding:1rem">Carregant...</p>'; return; }
+
+  // Si no tenim dades de quiniela, les carreguem
+  if (!_quinielaData.length) {
+    loadQuinielaData().then(() => renderQuinielaTab());
+    return;
+  }
+
+  // Partits de la jornada activa
+  const fase = FASE_ACTIVA_GLOBAL || PHASES[0];
+  const jorn = JORNADA_ACTIVA_GLOBAL || PHASE_JORNADES[fase]?.[0];
+  const partits = _quinielaData.filter(r =>
+    norm(v(r,'Fase')) === norm(fase) && norm(v(r,'Jornada')) === norm(jorn)
+  );
+
+  if (!partits.length) {
+    el.innerHTML = `<div class="empty-state"><div class="big-icon">🎯</div><p>No hi ha partits de quiniela per a ${PHASE_LABELS[fase]||fase} ${jorn?.toUpperCase()||''}.</p><p style="font-size:0.8rem;opacity:0.6">Afegeix els partits al Sheet "Quiniela".</p></div>`;
+    return;
+  }
+
+  // Selecció de jornada activa
+  const jornLabel = `${PHASE_LABELS[fase]||fase} ${jorn?.toUpperCase()||''}`;
+
+  // Login si no autenticat
+  if (!_quinielaAuth || !_quinielaParticipant) {
+    el.innerHTML = quinielaLogin(jornLabel);
+    return;
+  }
+
+  renderQuinielaNominated(el, partits, fase, jorn, jornLabel);
+}
+
+function quinielaLogin(jornLabel) {
+  const participants = getParticipants();
+  const opts = participants.map(p => `<option value="${p.replace(/"/g,'&quot;')}">${p}</option>`).join('');
+  return `<div class="info-banner"><span class="icon">🎯</span><div><strong>Quiniela — ${jornLabel}</strong><br>Entra la teva contrasenya per veure i enviar la teva quiniela.</div></div>
+  <div style="max-width:360px;margin:1.5rem auto">
+    <div class="form-row"><label>Participant:</label>
+      <select id="qParticipant" style="max-width:220px">${opts}</select>
+    </div>
+    <div class="form-row"><label>Contrasenya:</label>
+      <input type="password" id="qPass" class="modal-input" style="max-width:220px" placeholder="••••••••" onkeydown="if(event.key==='Enter')quinielaCheckAuth()">
+    </div>
+    <div id="qError" class="modal-error"></div>
+    <button class="btn-gold" onclick="quinielaCheckAuth()">Accedir</button>
+  </div>`;
+}
+
+function quinielaCheckAuth() {
+  const participant = document.getElementById('qParticipant')?.value;
+  const pass = document.getElementById('qPass')?.value;
+  const errEl = document.getElementById('qError');
+  const validPass = Q_PASSWORDS[participant];
+  if (!validPass) { if(errEl) errEl.textContent = 'Participant sense contrasenya configurada.'; return; }
+  if (pass !== validPass) { if(errEl) errEl.textContent = 'Contrasenya incorrecta.'; return; }
+  _quinielaParticipant = participant;
+  _quinielaAuth = true;
+  renderQuinielaTab();
+}
+
+function renderQuinielaNominated(el, partits, fase, jorn, jornLabel) {
+  const p = _quinielaParticipant;
+  const jornTancada = !JORNADA_REVELADA; // si no revelada, selecció tancada
+
+  // Llegeix les seleccions actuals del participant
+  const seleccions = {};
+  partits.forEach(r => {
+    const local = v(r,'Local'); const visitant = v(r,'Visitant');
+    const key = `${local}_${visitant}`;
+    const sel = v(r, p) || '';
+    seleccions[key] = sel;
+  });
+
+  // Resultat final (si existeix)
+  const resultat = partits.map(r => v(r,'Resultat')||'').join('');
+  const jaTancada = partits.some(r => v(r,'Resultat'));
+
+  // Comprova encerts
+  let encerts = 0;
+  if (jaTancada) {
+    partits.forEach(r => {
+      const key = `${v(r,'Local')}_${v(r,'Visitant')}`;
+      if (seleccions[key] && seleccions[key] === v(r,'Resultat')) encerts++;
+    });
+  }
+
+  const ptsGuanyats = (jaTancada && encerts === partits.length) ? 10 : 0;
+
+  let html = `<div class="info-banner"><span class="icon">🎯</span><div><strong>Quiniela ${jornLabel}</strong> — ${p}${jaTancada?` · ${encerts}/${partits.length} encerts${ptsGuanyats?` · <span style="color:#4ADE80">+${ptsGuanyats} pts!</span>`:''}`:''}</div>
+    <button onclick="_quinielaAuth=false;renderQuinielaTab()" style="margin-left:auto;background:none;border:1px solid var(--glass-border);color:var(--silver);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:0.75rem">Sortir</button>
+  </div>`;
+
+  if (SELECCIO_OBERTA && !jaTancada) {
+    html += `<p style="color:var(--silver);font-size:0.82rem;margin-bottom:1rem">Fes la teva quiniela per a ${jornLabel}. Un cop comenci la jornada, quedarà bloquejada.</p>`;
+  } else if (!jaTancada) {
+    html += `<div style="background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:8px;padding:0.7rem 1rem;margin-bottom:1rem;font-size:0.82rem;color:#F87171">🔒 La quiniela ja està tancada per a aquesta jornada.</div>`;
+  }
+
+  // Partits
+  html += `<div style="display:flex;flex-direction:column;gap:0.8rem;margin-bottom:1.5rem">`;
+  partits.forEach((r, i) => {
+    const local = v(r,'Local'); const visitant = v(r,'Visitant');
+    const key = `${local}_${visitant}`;
+    const sel = seleccions[key];
+    const res = v(r,'Resultat');
+    const editable = SELECCIO_OBERTA && !jaTancada;
+
+    const btnStyle = (val) => {
+      const isSelected = sel === val;
+      const isCorrect = jaTancada && res === val;
+      const isWrong = jaTancada && sel === val && res && res !== val;
+      let bg = 'rgba(255,255,255,0.07)';
+      let border = 'rgba(255,255,255,0.1)';
+      let color = 'var(--silver)';
+      if (isSelected && !jaTancada) { bg='rgba(30,100,220,0.3)'; border='#1E90FF'; color='#fff'; }
+      if (isCorrect && sel===val) { bg='rgba(74,222,128,0.25)'; border='#4ADE80'; color='#4ADE80'; }
+      if (isWrong) { bg='rgba(248,113,113,0.2)'; border='#F87171'; color='#F87171'; }
+      if (isCorrect && sel!==val && jaTancada) { bg='rgba(74,222,128,0.08)'; border='rgba(74,222,128,0.3)'; color='rgba(74,222,128,0.5)'; }
+      return `background:${bg};border:1.5px solid ${border};color:${color};border-radius:8px;padding:0.5rem 1.2rem;font-family:'Space Mono',monospace;font-size:0.85rem;font-weight:700;cursor:${editable?'pointer':'default'};transition:all 0.15s`;
+    };
+
+    const onClick = (val) => editable ? `onclick="quinielaSeleccionar('${key}',${i},'${val}')"` : '';
+
+    html += `<div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:10px;padding:0.8rem 1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap">
+        <div style="flex:1;min-width:100px;text-align:right;font-weight:700;font-size:0.9rem">${local}</div>
+        <div style="display:flex;gap:0.4rem;flex-shrink:0">
+          <button style="${btnStyle('1')}" ${onClick('1')}>1</button>
+          <button style="${btnStyle('X')}" ${onClick('X')}>X</button>
+          <button style="${btnStyle('2')}" ${onClick('2')}>2</button>
+        </div>
+        <div style="flex:1;min-width:100px;font-weight:700;font-size:0.9rem">${visitant}</div>
+      </div>
+      ${jaTancada && res ? `<div style="text-align:center;margin-top:0.4rem;font-size:0.72rem;color:var(--silver)">Resultat: <strong style="color:${sel===res?'#4ADE80':'#F87171'}">${res}</strong> ${sel===res?'✅':'❌'}</div>` : ''}
+    </div>`;
+  });
+  html += `</div>`;
+
+  if (SELECCIO_OBERTA && !jaTancada) {
+    html += `<button class="btn-gold" onclick="quinielaEnviar('${fase}','${jorn}')">📤 Enviar quiniela</button>
+    <div id="quinielaStatus" style="margin-top:0.8rem;font-size:0.82rem;color:var(--silver)"></div>`;
+  }
+
+  // Taula global (visible un cop tancada)
+  if (jaTancada) {
+    const participants = getParticipants();
+    html += `<div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;padding:1rem;margin-top:1.5rem">
+      <div style="font-family:'Bebas Neue',cursive;font-size:1rem;letter-spacing:0.08em;color:var(--gold);margin-bottom:0.8rem">📊 Resultats de tots els participants</div>
+      <div style="overflow-x:auto"><table class="jug-table"><thead><tr>
+        <th>Participant</th>${partits.map(r=>`<th>${v(r,'Local')} - ${v(r,'Visitant')}</th>`).join('')}<th>Encerts</th>
+      </tr></thead><tbody>
+      ${participants.map(pp => {
+        const sels = partits.map(r => v(r, pp)||'—');
+        const ress = partits.map(r => v(r,'Resultat')||'');
+        const enc = sels.filter((s,i)=>s===ress[i]&&s!=='—').length;
+        return `<tr>
+          <td style="font-weight:${pp===p?'700':'400'}">${pp}</td>
+          ${sels.map((s,i)=>`<td style="text-align:center;color:${s===ress[i]&&s!=='—'?'#4ADE80':s!=='—'?'#F87171':'var(--silver)'}">${s} ${s===ress[i]&&s!=='—'?'✅':s!=='—'?'❌':''}</td>`).join('')}
+          <td style="text-align:center;font-weight:700;color:${enc===partits.length?'#4ADE80':'var(--white)'}">${enc}/${partits.length}${enc===partits.length?' 🏆':''}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table></div></div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+const _quinielaSeleccions = {}; // local: {key: '1'|'X'|'2'}
+
+function quinielaSeleccionar(key, idx, val) {
+  _quinielaSeleccions[key] = val;
+  // Actualitza visualment els botons sense re-render complet
+  renderQuinielaTab();
+}
+
+async function quinielaEnviar(fase, jorn) {
+  const statusEl = document.getElementById('quinielaStatus');
+  if (statusEl) statusEl.textContent = 'Enviant...';
+  const p = _quinielaParticipant;
+
+  // Prepara la data per enviar al Sheet
+  // Per cada partit, actualitza la columna del participant
+  const partits = _quinielaData.filter(r =>
+    norm(v(r,'Fase'))===norm(fase) && norm(v(r,'Jornada'))===norm(jorn)
+  );
+
+  let errors = 0;
+  for (const r of partits) {
+    const local = v(r,'Local'); const visitant = v(r,'Visitant');
+    const key = `${local}_${visitant}`;
+    const sel = _quinielaSeleccions[key] || v(r,p) || '';
+    if (!sel) continue;
+    try {
+      const url = `${SCRIPT_URL}?action=set_quiniela&participant=${encodeURIComponent(p)}&fase=${encodeURIComponent(fase)}&jornada=${encodeURIComponent(jorn)}&local=${encodeURIComponent(local)}&visitant=${encodeURIComponent(visitant)}&seleccio=${encodeURIComponent(sel)}`;
+      const res = await fetch(url, {mode:'no-cors'});
+    } catch(e) { errors++; }
+  }
+
+  if (statusEl) statusEl.textContent = errors ? '⚠️ Alguna selecció no s\'ha pogut enviar.' : '✅ Quiniela enviada correctament!';
+  // Recarrega les dades
+  await loadQuinielaData();
+  renderQuinielaTab();
+}
+
+// Contrasenyes de la Quiniela (iguals que les de Cartes/Ruleta)
+const Q_PASSWORDS = {
+  'MBEMBA':            'siesta1999',
+  'NTNP':              'ntnp1302',
+  'TETPEÑA':           'APG',
+  'PAPALUUKAS FC':     'Papi1234@',
+  'POLILLAS':          'polfantasy1',
+  'BICHOS FC':         '',
+  'AGUTROT CF':        'policho1234',
+  'COCODRILS':         'Bandana123',
+  'ADAMROSVIKOVIC69':  'Fantasy123',
+  'FC SAVERIUS':       'waterpolo7034',
+  'SR GAMI':           '',
+};
+
 function renderAdminPanel() {
   const el = document.getElementById('adminContent');
   el.innerHTML = `
@@ -4315,6 +4508,7 @@ document.getElementById('mainNav').addEventListener('click', e => {
   if (tab === 'jugadors') { populateJugadorsFilters(); renderJugadorsTab(); }
   if (tab === 'ideal11') renderIdeal11Tab();
   if (tab === 'stats') renderStatsTab();
+  if (tab === 'quiniela') renderQuinielaTab();
   if (tab === 'ruleta') renderRuletaTab();
   if (tab === 'cartes') renderCartesTab();
   if (tab === 'canvis') renderCanvis();
@@ -4346,17 +4540,17 @@ function showToast(msg) {
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwe7egYwCGNeAWMKQEW8g7ncGlg3XPIP4HMJy6f8Bp9gz7n4HmfM1713uQMLu8nxGYv/exec';
 
 const R_PASSWORDS = {
-  'MBEMBA':            'siesta1999',
   'NTNP':              'ntnp1302',
-  'TETPEÑA':           'APG',
+  'MBEMBA':            'siesta1999',
   'PAPALUUKAS FC':     'Papi1234@',
+  'TETPEÑA':           'APG',
   'POLILLAS':          'polfantasy1',
-  'BICHOS FC':         '',
-  'AGUTROT CF':        'policho1234',
+  'FERGRAM FC':        'Ferranqr21',
+  'AGUTROT CF':           'policho1234',
   'COCODRILS':         'Bandana123',
   'ADAMROSVIKOVIC69':  'Fantasy123',
   'FC SAVERIUS':       'waterpolo7034',
-  'SR GAMI':           '',
+  'THEMARKMACK':       'Messi10',
 };
 
 
@@ -5028,19 +5222,19 @@ function getJugadorEfectiu(participant, jugador, fase, jornada) {
 // ============================================================
 // CARTES UI
 // ============================================================
-const C_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwe7egYwCGNeAWMKQEW8g7ncGlg3XPIP4HMJy6f8Bp9gz7n4HmfM1713uQMLu8nxGYv/exec';
+const C_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzChU0LpTDGrqsUEdWbwpcPlK--Ci7RI6G1cuja8p7Jn63rBuGcdPvDj7j47_iMeSOMPA/exec';
 const C_PASSWORDS = {
-  'MBEMBA':            'siesta1999',
   'NTNP':              'ntnp1302',
-  'TETPEÑA':           'APG',
+  'MBEMBA':            'siesta1999',
   'PAPALUUKAS FC':     'Papi1234@',
+  'TETPEÑA':           'APG',
   'POLILLAS':          'polfantasy1',
-  'BICHOS FC':         '',
-  'AGUTROT CF':        'policho1234',
+  'FERGRAM FC':        'Ferranqr21',
+  'AGUTROT CF':           'policho1234',
   'COCODRILS':         'Bandana123',
   'ADAMROSVIKOVIC69':  'Fantasy123',
   'FC SAVERIUS':       'waterpolo7034',
-  'SR GAMI':           '',
+  'THEMARKMACK':       'Messi10',
 };
 const CARTES_DEF = {
   'Capita x3':          {icon:'👑',color:'#F5C842',desc:'El teu capità puntua ×3 durant la jornada activa.',accio:'capita_x4'},
