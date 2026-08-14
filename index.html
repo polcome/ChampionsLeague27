@@ -490,6 +490,7 @@
 
 <nav class="nav-tabs" id="mainNav">
   <button class="tab-btn active" data-tab="ranking">🏆 Classificació</button>
+  <button class="tab-btn" data-tab="infojornada">📋 Info Jornada</button>
   <button class="tab-btn" data-tab="teams">👥 Equips</button>
   <button class="tab-btn" data-tab="jornades">📅 Jornades</button>
   <button class="tab-btn" data-tab="jugadors">⚽ Jugadors</button>
@@ -518,6 +519,11 @@
       <select id="teamSelect" style="max-width:220px" onchange="selectTeam(this.value)"></select>
     </div>
     <div id="teamView"></div>
+  </section>
+
+  <section class="section" id="tab-infojornada">
+    <div class="section-title">📋 Info Jornada</div>
+    <div id="infoJornadaContent"><div class="loading-state"><div class="spinner"></div><p>Carregant...</p></div></div>
   </section>
 
   <section class="section" id="tab-jornades">
@@ -4290,6 +4296,161 @@ const Q_PASSWORDS = {
   'SR GAMI':           '',
 };
 
+// ============================================================
+// INFO JORNADA
+// ============================================================
+let _infoJornadaFase = null;
+let _infoJornadaJorn = null;
+
+function renderInfoJornadaTab() {
+  const el = document.getElementById('infoJornadaContent');
+  if (!gData) { el.innerHTML = '<p style="color:var(--silver);padding:1rem">Carregant...</p>'; return; }
+
+  const participants = getParticipants();
+
+  // Totes les jornades possibles (de PHASES i PHASE_JORNADES)
+  const todesJornades = PHASES.flatMap(ph => (PHASE_JORNADES[ph]||[]).map(j => ({fase:ph,jorn:j})));
+
+  // Jornada per defecte: la revelada activa, o l'última amb dades
+  if (!_infoJornadaFase) {
+    // Prioritza jornada revelada (ja jugada)
+    if (JORNADA_REVELADA && FASE_ACTIVA_GLOBAL && JORNADA_ACTIVA_GLOBAL) {
+      _infoJornadaFase = FASE_ACTIVA_GLOBAL;
+      _infoJornadaJorn = JORNADA_ACTIVA_GLOBAL;
+    } else if (FASE_SELECCIO && JORNADA_SELECCIO) {
+      // Si no hi ha revelada, mostra la de selecció
+      _infoJornadaFase = FASE_SELECCIO;
+      _infoJornadaJorn = JORNADA_SELECCIO;
+    } else {
+      _infoJornadaFase = PHASES[0];
+      _infoJornadaJorn = PHASE_JORNADES[PHASES[0]]?.[0] || 'J1';
+    }
+  }
+
+  const fase = _infoJornadaFase;
+  const jorn = _infoJornadaJorn;
+  const jornLabel = `${PHASE_LABELS[fase]||fase} ${jorn.toUpperCase()}`;
+  const isRevelada = JORNADA_REVELADA && norm(FASE_ACTIVA_GLOBAL)===norm(fase) && norm(JORNADA_ACTIVA_GLOBAL)===norm(jorn);
+  const isSeleccio = norm(FASE_SELECCIO||'')===norm(fase) && norm(JORNADA_SELECCIO||'')===norm(jorn);
+
+  // Selector de jornada
+  const selectorHtml = `<div class="form-row" style="margin-bottom:1.2rem">
+    <label>Jornada:</label>
+    <select style="max-width:220px" onchange="infoJornadaCanvia(this.value)">
+      ${todesJornades.map(({fase:f,jorn:j}) => {
+        const k = `${f}_${j}`;
+        const lbl = `${PHASE_LABELS[f]||f} ${j.toUpperCase()}`;
+        return `<option value="${k}" ${norm(f)===norm(fase)&&norm(j)===norm(jorn)?'selected':''}>${lbl}</option>`;
+      }).join('')}
+    </select>
+  </div>`;
+
+  // Missatge si la jornada no ha estat revelada (no ha começat)
+  if (!isRevelada && !isSeleccio) {
+    const noRevMsg = `<div class="info-banner"><span class="icon">⏳</span><div>Quan comenci la jornada <strong>${jornLabel}</strong>, podràs veure la informació aquí.</div></div>`;
+    el.innerHTML = selectorHtml + noRevMsg;
+    return;
+  }
+
+  // ── Bloc 1: Capitans ───────────────────────────────────────────────────────
+  const capsData = capitansSlot(fase, jorn);
+  const capsHtml = `<div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;padding:1rem;margin-bottom:1rem">
+    <div style="font-family:'Bebas Neue',cursive;font-size:1rem;letter-spacing:0.08em;color:var(--gold);margin-bottom:0.8rem">⭐ Capitans — ${jornLabel}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.5rem">
+      ${participants.map(p => {
+        const cap = capsData[norm(p)];
+        const plData = cap ? (gData.jugadors||[]).find(r=>norm(v(r,'Jugador'))===norm(cap)&&norm(v(r,'Participant'))===norm(p))
+          || (gData.jugadors||[]).find(r=>norm(v(r,'Jugador'))===norm(cap)) : null;
+        const foto = plData ? v(plData,'Foto') : '';
+        const mult = cap ? getCapitaMultiplier(p, fase, jorn) : 1;
+        const anulat = cap ? isCapitaAnulat(p, fase, jorn) : false;
+        return `<div style="background:rgba(255,255,255,0.03);border:1px solid var(--glass-border);border-radius:8px;padding:0.5rem 0.7rem;display:flex;align-items:center;gap:0.6rem">
+          ${foto?`<img src="${foto}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${anulat?'#F87171':'var(--gold)'}" onerror="this.style.display='none'">`:
+            `<div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">⭐</div>`}
+          <div style="min-width:0">
+            <div style="font-size:0.75rem;font-weight:700;color:var(--silver);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p}</div>
+            <div style="font-size:0.8rem;font-weight:700;color:${anulat?'#F87171':'var(--white)'}">
+              ${cap||'<span style="opacity:0.4">Sense capità</span>'}
+              ${cap?`<span style="font-size:0.65rem;color:${anulat?'#F87171':'var(--gold)'}"> ×${anulat?'1 ❌':mult}</span>`:''}
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  // ── Bloc 2: Cartes ─────────────────────────────────────────────────────────
+  const cartesData = cartesSlot(fase, jorn);
+  const cartesHtml = `<div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;padding:1rem;margin-bottom:1rem">
+    <div style="font-family:'Bebas Neue',cursive;font-size:1rem;letter-spacing:0.08em;color:#60A5FA;margin-bottom:0.8rem">🃏 Cartes — ${jornLabel}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0.5rem">
+      ${participants.map(p => {
+        const carta = cartesData[norm(p)];
+        const nom = carta?.carta || null;
+        const det = carta?.detall || {};
+        let desc = '';
+        if (nom === 'Canvi jugador rival') desc = `${det.jugador_meu||'?'} ↔ ${det.jugador_rival||'?'}`;
+        else if (nom === 'Anular capita rival') desc = `Capità de ${det.rival||'?'}`;
+        else if (nom === 'Anular jugador rival') desc = `${det.jugador||'?'} de ${det.rival||'?'}`;
+        else if (nom === 'Blindar jugador') desc = det.jugador||'?';
+        else if (nom === 'Capita manual') desc = det.jugador||'?';
+        else if (nom === 'Doble capita') desc = det.jugador||'?';
+        else if (nom === 'Comodi') desc = det.carta||'?';
+        return `<div style="background:rgba(255,255,255,0.03);border:1px solid var(--glass-border);border-radius:8px;padding:0.5rem 0.7rem">
+          <div style="font-size:0.72rem;font-weight:700;color:var(--silver);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p}</div>
+          ${nom
+            ? `<div style="font-size:0.78rem;color:#60A5FA;font-weight:600">${nom}</div>${desc?`<div style="font-size:0.7rem;color:var(--silver)">${desc}</div>`:''}`
+            : `<div style="font-size:0.78rem;color:rgba(255,255,255,0.2)">Sense carta</div>`}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  // ── Bloc 3: Quiniela ───────────────────────────────────────────────────────
+  const qPartits = _quinielaData.filter(r => norm(v(r,'Fase'))===norm(fase) && norm(v(r,'Jornada'))===norm(jorn));
+  let quinielaHtml = '';
+  if (qPartits.length) {
+    const jaTancada = qPartits.some(r => v(r,'Resultat') && v(r,'Resultat') !== '');
+    quinielaHtml = `<div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;padding:1rem;margin-bottom:1rem">
+      <div style="font-family:'Bebas Neue',cursive;font-size:1rem;letter-spacing:0.08em;color:#4ADE80;margin-bottom:0.8rem">🎯 Quiniela — ${jornLabel}${jaTancada?' · Resultats disponibles':' · Pendent de resultat'}</div>
+      <div style="overflow-x:auto">
+        <table class="jug-table"><thead><tr>
+          <th>Participant</th>
+          ${qPartits.map(r=>`<th style="font-size:0.7rem">${v(r,'Local')}<br>${v(r,'Visitant')}</th>`).join('')}
+          ${jaTancada?'<th>Encerts</th>':''}
+        </tr></thead><tbody>
+        ${participants.map(pp => {
+          const sels = qPartits.map(r => v(r,pp)||'—');
+          const ress = qPartits.map(r => v(r,'Resultat')||'');
+          const enc = jaTancada ? sels.filter((s,i)=>s===ress[i]&&s!=='—').length : null;
+          return `<tr>
+            <td style="font-size:0.8rem;font-weight:600">${pp}</td>
+            ${sels.map((s,i) => {
+              let col = 'var(--silver)';
+              let suf = '';
+              if (jaTancada && s!=='—') { col = s===ress[i]?'#4ADE80':'#F87171'; suf = s===ress[i]?' ✅':' ❌'; }
+              return `<td style="text-align:center;font-family:'Space Mono',monospace;font-weight:700;color:${col}">${s}${suf}</td>`;
+            }).join('')}
+            ${jaTancada?`<td style="text-align:center;font-weight:700;color:${enc===qPartits.length?'#4ADE80':'var(--white)'}">${enc}/${qPartits.length}${enc===qPartits.length?' 🏆':''}</td>`:''}
+          </tr>`;
+        }).join('')}
+        ${jaTancada?`<tr style="background:rgba(255,255,255,0.03)"><td style="font-size:0.7rem;color:var(--silver)">Resultat</td>${ress.map(r=>`<td style="text-align:center;font-family:'Space Mono',monospace;font-weight:700;color:var(--gold)">${r||'—'}</td>`).join('')}<td></td></tr>`.replace('ress',qPartits.map(r=>v(r,'Resultat')||'')):''}
+        </tbody></table>
+      </div>
+    </div>`;
+  }
+
+  el.innerHTML = selectorHtml + capsHtml + cartesHtml + quinielaHtml;
+}
+
+function infoJornadaCanvia(key) {
+  const [fase, ...rest] = key.split('_');
+  const jorn = rest.join('_'); // per si la jornada té underscore
+  _infoJornadaFase = PHASES.find(p => norm(p)===norm(fase)) || fase;
+  _infoJornadaJorn = jorn.toUpperCase();
+  renderInfoJornadaTab();
+}
+
 function renderAdminPanel() {
   const el = document.getElementById('adminContent');
   el.innerHTML = `
@@ -4678,6 +4839,7 @@ document.getElementById('mainNav').addEventListener('click', e => {
   if (tab === 'ideal11') renderIdeal11Tab();
   if (tab === 'stats') renderStatsTab();
   if (tab === 'quiniela') renderQuinielaTab();
+  if (tab === 'infojornada') renderInfoJornadaTab();
   if (tab === 'ruleta') renderRuletaTab();
   if (tab === 'cartes') renderCartesTab();
   if (tab === 'canvis') renderCanvis();
