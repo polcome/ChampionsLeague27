@@ -4345,8 +4345,17 @@ function renderInfoJornadaTab() {
     </select>
   </div>`;
 
-  // Missatge si la jornada no ha estat revelada (no ha começat)
-  if (!isRevelada && !isSeleccio) {
+  // Mostra si: és la jornada activa revelada, és una jornada passada, o té dades
+  // Oculta si: és una jornada futura (posterior a l'activa i sense dades)
+  const jornadaIdx = jornadaIndex(fase, jorn);
+  const activaIdx = jornadaIndex(FASE_ACTIVA_GLOBAL||fase, JORNADA_ACTIVA_GLOBAL||jorn);
+  const isPast = jornadaIdx <= activaIdx;
+  const hasDades = participants.some(p => {
+    const caps = capitansSlot(fase, jorn);
+    return caps[norm(p)];
+  });
+
+  if (!isPast && !hasDades) {
     const noRevMsg = `<div class="info-banner"><span class="icon">⏳</span><div>Quan comenci la jornada <strong>${jornLabel}</strong>, podràs veure la informació aquí.</div></div>`;
     el.innerHTML = selectorHtml + noRevMsg;
     return;
