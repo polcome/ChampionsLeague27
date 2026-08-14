@@ -4434,7 +4434,10 @@ function renderInfoJornadaTab() {
             ${jaTancada?`<td style="text-align:center;font-weight:700;color:${enc===qPartits.length?'#4ADE80':'var(--white)'}">${enc}/${qPartits.length}${enc===qPartits.length?' 🏆':''}</td>`:''}
           </tr>`;
         }).join('')}
-        ${jaTancada?`<tr style="background:rgba(255,255,255,0.03)"><td style="font-size:0.7rem;color:var(--silver)">Resultat</td>${ress.map(r=>`<td style="text-align:center;font-family:'Space Mono',monospace;font-weight:700;color:var(--gold)">${r||'—'}</td>`).join('')}<td></td></tr>`.replace('ress',qPartits.map(r=>v(r,'Resultat')||'')):''}
+        ${jaTancada ? (() => {
+          const ress2 = qPartits.map(r => v(r,'Resultat')||'');
+          return `<tr style="background:rgba(255,255,255,0.03)"><td style="font-size:0.7rem;color:var(--silver)">Resultat</td>${ress2.map(r=>`<td style="text-align:center;font-family:'Space Mono',monospace;font-weight:700;color:var(--gold)">${r||'—'}</td>`).join('')}<td></td></tr>`;
+        })() : ''}
         </tbody></table>
       </div>
     </div>`;
