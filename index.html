@@ -1340,6 +1340,55 @@ function getSuplentPts(participant, fase, jornada) {
 // Pestanya "Entrenadors" al Sheet: Participant | Fase | Jornada | Punts | Nom | Foto
 let _entrenadors = []; // carregat amb les altres dades
 
+// ── Suplent Extra (carta) ─────────────────────────────────────────────────────
+// Retorna el jugador suplent robat d'un rival (si s'ha aplicat la carta)
+function getSuplentRobat(participant, fase, jornada) {
+  const k = `suprobbat_${participant}_${fase}_${jornada}`;
+  if (_cache[k] !== undefined) return _cache[k];
+  // Busca si aquest participant té la carta "Suplent Extra" aplicada
+  const cartes = cartesSlot(fase, jornada);
+  const carta = cartes[norm(participant)];
+  if (!carta || carta.carta !== 'Suplent Extra') { _cache[k] = null; return null; }
+  const rivalNorm = norm(carta.detall?.rival || '');
+  if (!rivalNorm) { _cache[k] = null; return null; }
+  // Busca el suplent del rival
+  const rivalNom = getParticipants().find(p => norm(p) === rivalNorm);
+  if (!rivalNom) { _cache[k] = null; return null; }
+  const supRival = getSuplent(rivalNom, fase, jornada);
+  _cache[k] = supRival || null;
+  return _cache[k];
+}
+
+// Punts del suplent robat (sempre actiu — carta Suplent Extra)
+function getSuplentRobatPts(participant, fase, jornada) {
+  const k = `suprobatpts_${participant}_${fase}_${jornada}`;
+  if (_cache[k] !== undefined) return _cache[k];
+  const supRival = getSuplentRobat(participant, fase, jornada);
+  if (!supRival) { _cache[k] = 0; return 0; }
+  // Busca el rival per obtenir la puntuació del seu suplent
+  const cartes = cartesSlot(fase, jornada);
+  const carta = cartes[norm(participant)];
+  const rivalNom = getParticipants().find(p => norm(p) === norm(carta.detall?.rival || ''));
+  if (!rivalNom) { _cache[k] = 0; return 0; }
+  const sc = getScoreEfectiu(rivalNom, v(supRival,'Jugador'), fase, jornada);
+  const pts = calcScoreRow(sc, v(supRival,'Posicio'), v(supRival,'Jugador'), fase, jornada, participant) || 0;
+  _cache[k] = pts;
+  return pts;
+}
+
+// Retorna true si el suplent d'aquest participant ha estat robat per un altre
+function isSuplentRobat(participant, fase, jornada) {
+  const k = `issuprob_${participant}_${fase}_${jornada}`;
+  if (_cache[k] !== undefined) return _cache[k];
+  const cartes = cartesSlot(fase, jornada);
+  const lladre = getParticipants().find(p => {
+    const c = cartes[norm(p)];
+    return c && c.carta === 'Suplent Extra' && norm(c.detall?.rival||'') === norm(participant);
+  });
+  _cache[k] = lladre || null;
+  return _cache[k];
+}
+
 function getEntrenadorPts(participant, fase, jornada) {
   if (!_entrenadors.length) return 0;
   const row = _entrenadors.find(r =>
@@ -1374,6 +1423,8 @@ function calcParticipantTotal(participant) {
       }
       // Suplent (si actiu)
       total += getSuplentPts(participant, ph, jorn);
+      // Suplent robat (carta Suplent Extra)
+      total += getSuplentRobatPts(participant, ph, jorn);
       // Entrenador
       total += getEntrenadorPts(participant, ph, jorn);
       // Quiniela
@@ -1475,7 +1526,7 @@ function calcParticipantPhaseTotal(participant, ph) {
       const sc = getScoreEfectiu(participant, v(pl,'Jugador'), ph, jorn);
       return s2 + (calcScoreRow(sc, v(pl,'Posicio'), v(pl,'Jugador'), ph, jorn, participant) || 0);
     }, 0);
-    return s + titPts + getSuplentPts(participant, ph, jorn) + getEntrenadorPts(participant, ph, jorn) + getQuinielaPts(participant, ph, jorn);
+    return s + titPts + getSuplentPts(participant, ph, jorn) + getSuplentRobatPts(participant, ph, jorn) + getEntrenadorPts(participant, ph, jorn) + getQuinielaPts(participant, ph, jorn);
   }, 0);
   _cache[k] = result;
   return result;
@@ -1961,6 +2012,7 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
       }, 0);
     return titPts
       + getSuplentPts(participant, phase, jornada)
+      + getSuplentRobatPts(participant, phase, jornada)
       + getEntrenadorPts(participant, phase, jornada)
       + getQuinielaPts(participant, phase, jornada);
   })();
@@ -2191,6 +2243,15 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
   const entPtsR = getEntrenadorPts(participant, phase, jornada);
   const entInfoR = getEntrenadorInfo(participant);
 
+  // Suplent robat (carta Suplent Extra)
+  const supRobatPl = getSuplentRobat(participant, phase, jornada);
+  const supRobatPts = supRobatPl ? getSuplentRobatPts(participant, phase, jornada) : 0;
+  const supRobatCartes = supRobatPl ? cartesSlot(phase, jornada)[norm(participant)] : null;
+  const rivalRobat = supRobatCartes?.detall?.rival || '';
+
+  // El suplent del participant ha estat robat?
+  const lladreNom = isSuplentRobat(participant, phase, jornada);
+
   const makeBenchPinR = (foto, nom, pts, color, badge, rol, onclickStr) => `
     <div style="text-align:center;min-width:64px">
       <div style="position:relative;display:inline-block;cursor:${onclickStr||nom?'pointer':'default'}"
@@ -2206,18 +2267,24 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
       <div style="font-size:0.52rem;color:var(--silver);opacity:0.6;text-transform:uppercase;letter-spacing:0.08em">${rol==='ent'?'Entrenador':'Suplent'}</div>
     </div>`;
 
-  const supColorR = supActiuR?'#F59E0B':'rgba(255,255,255,0.2)';
+  const supColorR = lladreNom ? '#F87171' : (supActiuR?'#F59E0B':'rgba(255,255,255,0.2)');
+  const supBadgeR = lladreNom ? `🚨 ROBAT per ${lladreNom}` : (supActiuR?'▶ ACTIU':'');
   const supPinR = supPlR
-    ? makeBenchPinR(v(supPlR,'Foto'), v(supPlR,'Jugador'), supActiuR?supPtsR:null, supColorR, supActiuR?'▶ ACTIU':'', 'sup')
+    ? makeBenchPinR(v(supPlR,'Foto'), v(supPlR,'Jugador'), lladreNom?null:(supActiuR?supPtsR:null), supColorR, supBadgeR, 'sup', `openPlayerCard('${esc(v(supPlR,"Jugador"))}','${esc(participant)}','${phase}','${jornada}')`)
     : `<div style="min-width:64px;text-align:center;opacity:0.25"><div style="width:50px;height:50px;border-radius:50%;border:2px dashed rgba(255,255,255,0.2);margin:0 auto;display:flex;align-items:center;justify-content:center">👤</div><div style="font-size:0.52rem;color:var(--silver);margin-top:6px;text-transform:uppercase">Suplent</div></div>`;
+
+  const supRobatPin = supRobatPl
+    ? makeBenchPinR(v(supRobatPl,'Foto'), v(supRobatPl,'Jugador'), supRobatPts, '#F97316', `🦺 ${rivalRobat}`, 'suprobat', `openPlayerCard('${esc(v(supRobatPl,"Jugador"))}','${esc(rivalRobat)}','${phase}','${jornada}')`)
+    : '';
 
   const entColorR = entPtsR>=5?'#4ADE80':entPtsR>=2?'#FBBF24':'rgba(255,255,255,0.2)';
   const entPinR = entInfoR
     ? makeBenchPinR(v(entInfoR,'Foto'), v(entInfoR,'Nom')||'Entrenador', entPtsR, entColorR, '', 'ent', `openEntrenadorCard('${esc(participant)}')`)
     : `<div style="min-width:64px;text-align:center;opacity:0.25"><div style="width:50px;height:50px;border-radius:50%;border:2px dashed rgba(255,255,255,0.2);margin:0 auto;display:flex;align-items:center;justify-content:center">🧑‍💼</div><div style="font-size:0.52rem;color:var(--silver);margin-top:6px;text-transform:uppercase">Entrenador</div></div>`;
 
-  const benchR = `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.7rem 1.2rem;background:linear-gradient(180deg,rgba(8,20,55,0.9),rgba(5,12,30,0.95));border-top:1px dashed rgba(30,100,220,0.25)">
+  const benchR = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.3rem;padding:0.7rem 1.2rem;background:linear-gradient(180deg,rgba(8,20,55,0.9),rgba(5,12,30,0.95));border-top:1px dashed rgba(30,100,220,0.25)">
     ${supPinR}
+    ${supRobatPin}
     <div style="font-family:'Space Mono',monospace;font-size:0.5rem;color:rgba(255,255,255,0.15);letter-spacing:0.25em;text-transform:uppercase">Banqueta</div>
     ${entPinR}
   </div>`;
@@ -2309,7 +2376,7 @@ function _renderTeamFull() {
         const jPts = jPlayers.reduce((s, pl) => {
           const sc = getScoreEfectiu(participant, v(pl,'Jugador'), _activePhase, j);
           return s + (calcScoreRow(sc, v(pl,'Posicio'), v(pl,'Jugador'), _activePhase, j, participant) || 0);
-        }, 0) + getSuplentPts(participant, _activePhase, j) + getEntrenadorPts(participant, _activePhase, j) + getQuinielaPts(participant, _activePhase, j);
+        }, 0) + getSuplentPts(participant, _activePhase, j) + getSuplentRobatPts(participant, _activePhase, j) + getEntrenadorPts(participant, _activePhase, j) + getQuinielaPts(participant, _activePhase, j);
         const badge = jPts > 0 ? `<span style="background:rgba(74,159,255,0.15);color:#4A9FFF;font-size:0.55rem;padding:1px 5px;border-radius:8px;margin-left:4px">${jPts}</span>` : '';
         const jLabel = _activePhase === 'lliga' ? j : (j === 'A' ? 'Anada' : j === 'T' ? 'Tornada' : j);
         return `<button onclick="selectJorn('${j}')" style="background:none;border:none;cursor:pointer;padding:0.7rem 1rem;font-family:'Space Mono',monospace;font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:${active?'#4A9FFF':'var(--silver)'};border-bottom:2px solid ${active?'#4A9FFF':'transparent'};display:flex;align-items:center;gap:2px">${jLabel}${badge}</button>`;
@@ -2955,6 +3022,7 @@ function statsPtsJornada(participant, fase, jornada) {
     total += calcScoreRow(sc, pos, v(pl,'Jugador'), fase, jornada, participant) || 0;
   }
   total += getSuplentPts(participant, fase, jornada);
+  total += getSuplentRobatPts(participant, fase, jornada);
   total += getEntrenadorPts(participant, fase, jornada);
   total += getQuinielaPts(participant, fase, jornada);
   return total;
@@ -5596,6 +5664,7 @@ const CARTES_DEF = {
   'Doble capita':        {icon:'⭐',color:'#FBBF24',desc:'Tens dos capitans. El segon jugador també puntua ×2.',accio:'doble_capita'},
   'Gol doble':           {icon:'⚽',color:'#4ADE80',desc:'Tots els gols del teu equip valen el doble de punts.',accio:'gol_doble'},
   'Blindar jugador':     {icon:'🛡️',color:'#38BDF8',desc:'Protegeix un jugador teu durant la jornada: no pot ser anulat, intercanviat ni tenir el seu efecte de capità anulat per cap carta rival.',accio:'blindar_jugador'},
+  'Suplent Extra':       {icon:'🦺',color:'#F97316',desc:"Robes el suplent d'un rival per aquesta jornada. El suplent robat sempre puntua per a tu. El rival es queda sense suplent.",accio:'suplent_extra'},
   'Comodi':              {icon:'🃏',color:'#F472B6',desc:"Tries qualsevol de les altres 8 cartes.",accio:'comodi'},
 };
 let cParticipant='', cCartaData=null, cComodiSel='', cAllPlayers={};
@@ -5928,6 +5997,12 @@ function cRenderAccio(accio) {
         </div>
       </div>`;
     }
+    case 'suplent_extra': return panel('🦺 Suplent Extra',
+      fr('Rival a qui robar el suplent:','se_rival',rivOpts)+
+      `<div style="background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.3);border-radius:8px;padding:0.7rem 1rem;margin-bottom:0.7rem;font-size:0.82rem;color:var(--silver)">
+        🦺 El suplent del rival triat <strong style="color:#F97316">puntua sempre</strong> per a tu aquesta jornada.<br>El rival es queda <strong style="color:#F87171">sense suplent</strong>.
+      </div>`,
+      '🦺 Robar Suplent','background:linear-gradient(135deg,#c2410c,#F97316);color:white',"cConfirmarForm('suplent_extra')");
     case 'blindar_jugador': return panel('🛡️ Blindar Jugador',
       fr('Jugador a blindar:','bj_jugador',myOpts)+
       `<div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:0.7rem 1rem;margin-bottom:0.7rem;font-size:0.82rem;color:var(--silver)">
@@ -6015,6 +6090,7 @@ function cConfirmarForm(accio){
   else if(accio==='canvi_jugador_rival'){params.rival=document.getElementById('cjr_rival')?.value;params.jugador_meu=document.getElementById('cjr_jugador_meu')?.value;params.jugador_rival=document.getElementById('cjr_jugador_rival')?.value;if(!params.rival||!params.jugador_meu||!params.jugador_rival){showToast('Omple tots els camps');return;}}
   else if(accio==='capita_manual'){params.jugador=document.getElementById('cm_jugador')?.value;if(!params.jugador){showToast('Selecciona un jugador');return;}}
   else if(accio==='blindar_jugador'){params.jugador=document.getElementById('bj_jugador')?.value;if(!params.jugador){showToast('Selecciona un jugador a blindar');return;}}
+  else if(accio==='suplent_extra'){params.rival=document.getElementById('se_rival')?.value;if(!params.rival){showToast('Selecciona el rival');return;}}
   else if(accio==='doble_capita'){params.jugador=window._dcSpinResult||null;if(!params.jugador){showToast('Primer gira la ruleta del 2n capità!');return;}}
   cConfirmar(params);
 }
