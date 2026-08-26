@@ -4421,19 +4421,19 @@ function renderInfoJornadaTab() {
     </select>
   </div>`;
 
-  // Mostra si: és la jornada activa revelada, és una jornada passada, o té dades
-  // Oculta si: és una jornada futura (posterior a l'activa i sense dades)
+  // Mostra si: és una jornada passada (anterior a l'activa) O és l'activa i ja revelada
+  // Oculta si: és futura, o és l'activa però encara no revelada (selecció oberta)
   const jornadaIdx = jornadaIndex(fase, jorn);
   const activaIdx = jornadaIndex(FASE_ACTIVA_GLOBAL||fase, JORNADA_ACTIVA_GLOBAL||jorn);
-  const isPast = jornadaIdx <= activaIdx;
-  const hasDades = participants.some(p => {
-    const caps = capitansSlot(fase, jorn);
-    return caps[norm(p)];
-  });
+  const isCurrentJornada = jornadaIdx === activaIdx && norm(fase)===norm(FASE_ACTIVA_GLOBAL||'') && norm(jorn)===norm(JORNADA_ACTIVA_GLOBAL||'');
+  const isPast = jornadaIdx < activaIdx;
+  const canShow = isPast || (isCurrentJornada && JORNADA_REVELADA);
 
-  if (!isPast && !hasDades) {
-    const noRevMsg = `<div class="info-banner"><span class="icon">⏳</span><div>Quan comenci la jornada <strong>${jornLabel}</strong>, podràs veure la informació aquí.</div></div>`;
-    el.innerHTML = selectorHtml + noRevMsg;
+  if (!canShow) {
+    const msg = isCurrentJornada
+      ? `<div class="info-banner"><span class="icon">🔒</span><div>La jornada <strong>${jornLabel}</strong> encara no ha començat. La informació es mostrarà quan s'iniciï.</div></div>`
+      : `<div class="info-banner"><span class="icon">⏳</span><div>Quan comenci la jornada <strong>${jornLabel}</strong>, podràs veure la informació aquí.</div></div>`;
+    el.innerHTML = selectorHtml + msg;
     return;
   }
 
@@ -5211,7 +5211,8 @@ async function rLoadRuleta() {
   // Jugadors de l'equip (de la fase/jornada de SELECCIÓ, no la activa)
   const rFaseSel = FASE_SELECCIO || FASE_ACTIVA_GLOBAL;
   const rJornSel = JORNADA_SELECCIO || JORNADA_ACTIVA_GLOBAL;
-  const rPlayers = getPlayersForPhase(rParticipant, rFaseSel, rJornSel);
+  const rPlayers = getPlayersForPhase(rParticipant, rFaseSel, rJornSel)
+    .filter(pl => norm(getRolEfectiu(pl, rFaseSel, rJornSel)) !== 'sup');
 
   // Carrega capitans de les dues jornades (activa + selecció)
   let rCapitaActiva = null, rCapitaSeleccio = null, allCapitansRows = [];
@@ -5641,7 +5642,7 @@ function getJugadorEfectiu(participant, jugador, fase, jornada) {
 // ============================================================
 // CARTES UI
 // ============================================================
-const C_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzChU0LpTDGrqsUEdWbwpcPlK--Ci7RI6G1cuja8p7Jn63rBuGcdPvDj7j47_iMeSOMPA/exec';
+const C_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwe7egYwCGNeAWMKQEW8g7ncGlg3XPIP4HMJy6f8Bp9gz7n4HmfM1713uQMLu8nxGYv/exec';
 const C_PASSWORDS = {
   'NTNP':              'ntnp1302',
   'MBEMBA':            'siesta1999',
@@ -5944,7 +5945,10 @@ function cRenderCarta() {
 function cRenderAccio(accio) {
   const rivals=getParticipants().filter(p=>norm(p)!==norm(cParticipant));
   const rivOpts=rivals.map(r=>`<option value="${r}">${r}</option>`).join('');
-  const myPl=cAllPlayers[norm(cParticipant)]||[];
+  // Fase/jornada de selecció per filtrar el rol SUP
+  const cFase = FASE_SELECCIO||FASE_ACTIVA_GLOBAL;
+  const cJorn = JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL;
+  const myPl = (cAllPlayers[norm(cParticipant)]||[]).filter(p => norm(getRolEfectiu(p, cFase, cJorn)) !== 'sup');
   const myOpts=myPl.map(p=>`<option value="${esc(v(p,'Jugador'))}">${v(p,'Jugador')} (${v(p,'Posicio')})</option>`).join('');
   const panel=(h3,body,btnTxt,btnStyle,fn)=>`<div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:16px;padding:1.5rem;max-width:480px;margin:0 auto">
     <div style="font-family:'Space Mono',monospace;font-size:0.7rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold);margin-bottom:1rem">${h3}</div>
@@ -6029,7 +6033,7 @@ function cRenderComodi(){
 }
 function cSelectComodi(carta){cComodiSel=carta;cRenderCarta();}
 function cInitSelectors(){
-  const upd=(a,b)=>{const riv=document.getElementById(a)?.value;const sel=document.getElementById(b);if(!sel||!riv)return;const pls=cAllPlayers[norm(riv)]||[];sel.innerHTML=pls.map(p=>`<option value="${esc(v(p,'Jugador'))}">${v(p,'Jugador')} (${v(p,'Equip')})</option>`).join('');};
+  const upd=(a,b)=>{const riv=document.getElementById(a)?.value;const sel=document.getElementById(b);if(!sel||!riv)return;const pls=(cAllPlayers[norm(riv)]||[]).filter(p=>norm(getRolEfectiu(p,cFase,cJorn))!=='sup');sel.innerHTML=pls.map(p=>`<option value="${esc(v(p,'Jugador'))}">${v(p,'Jugador')} (${v(p,'Equip')})</option>`).join('');};
   upd('aj_rival','aj_jugador');upd('cjr_rival','cjr_jugador_rival');
   document.getElementById('aj_rival')?.addEventListener('change',()=>upd('aj_rival','aj_jugador'));
   document.getElementById('cjr_rival')?.addEventListener('change',()=>upd('cjr_rival','cjr_jugador_rival'));
