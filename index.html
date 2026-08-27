@@ -6041,7 +6041,9 @@ function cRenderComodi(){
 }
 function cSelectComodi(carta){cComodiSel=carta;cRenderCarta();}
 function cInitSelectors(){
-  const upd=(a,b)=>{const riv=document.getElementById(a)?.value;const sel=document.getElementById(b);if(!sel||!riv)return;const pls=(cAllPlayers[norm(riv)]||[]).filter(p=>norm(getRolEfectiu(p,cFase,cJorn))!=='sup');sel.innerHTML=pls.map(p=>`<option value="${esc(v(p,'Jugador'))}">${v(p,'Jugador')} (${v(p,'Equip')})</option>`).join('');};
+  const _cFase = FASE_SELECCIO || FASE_ACTIVA_GLOBAL;
+  const _cJorn = JORNADA_SELECCIO || JORNADA_ACTIVA_GLOBAL;
+  const upd=(a,b)=>{const riv=document.getElementById(a)?.value;const sel=document.getElementById(b);if(!sel||!riv)return;const pls=(cAllPlayers[norm(riv)]||[]).filter(p=>norm(getRolEfectiu(p,_cFase,_cJorn))!=='sup');sel.innerHTML=pls.map(p=>`<option value="${esc(v(p,'Jugador'))}">${v(p,'Jugador')} (${v(p,'Equip')})</option>`).join('');};
   setTimeout(()=>{upd('aj_rival','aj_jugador');upd('cjr_rival','cjr_jugador_rival');},50);
   document.getElementById('aj_rival')?.addEventListener('change',()=>upd('aj_rival','aj_jugador'));
   document.getElementById('cjr_rival')?.addEventListener('change',()=>upd('cjr_rival','cjr_jugador_rival'));
