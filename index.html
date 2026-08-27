@@ -5451,29 +5451,23 @@ function rDoSpin() {
 }
 
 async function rSaveCapita(jugador, rPlayers) {
-  document.getElementById('ruletaTabContent').innerHTML += '';
-  // Guarda per a la jornada de SELECCIÓ (pot ser la propera, no la revelada)
   const faseSave   = FASE_SELECCIO   || FASE_ACTIVA_GLOBAL;
   const jornadaSave = JORNADA_SELECCIO || JORNADA_ACTIVA_GLOBAL;
-  try {
-    await rPost({action:'set_capita', participant:rParticipant, fase:faseSave, jornada:jornadaSave, capita:jugador});
-  } catch(e) { console.warn('Error guardant capità:', e); }
+
+  // Actualitza UI immediatament (optimistic)
   rSpinResult = jugador;
-  // Si la jornada de selecció = jornada activa revelada, actualitza el mapa visible
   if (norm(faseSave)===norm(FASE_ACTIVA_GLOBAL) && norm(jornadaSave)===norm(JORNADA_ACTIVA_GLOBAL) && JORNADA_REVELADA) {
     const activeKey = jKey(FASE_ACTIVA_GLOBAL, JORNADA_ACTIVA_GLOBAL);
     if (!_capitansMap[activeKey]) _capitansMap[activeKey] = {};
-    const cartaManual = cartesSlot(FASE_ACTIVA_GLOBAL, JORNADA_ACTIVA_GLOBAL)[norm(rParticipant)];
-    if (cartaManual?.carta === 'Capita manual' && cartaManual.detall?.jugador) {
-      _capitansMap[activeKey][norm(rParticipant)] = cartaManual.detall.jugador;
-    } else {
-      _capitansMap[activeKey][norm(rParticipant)] = jugador;
-    }
+    _capitansMap[activeKey][norm(rParticipant)] = jugador;
   }
-  clearCache();
-  renderRanking();
-  // Recarrega la ruleta completament (actualitza amb capità assignat)
-  rLoadRuleta();
+  clearCache(); renderRanking();
+  rRenderMain(rPlayers, jugador, jugador, []);
+  showToast('⭐ Capità assignat: ' + jugador);
+
+  // Envia al server en segon pla (sense bloquejar la UI)
+  rPost({action:'set_capita', participant:rParticipant, fase:faseSave, jornada:jornadaSave, capita:jugador})
+    .catch(e => console.warn('Error guardant capità:', e));
 }
 
 async function rResetCapita() {
@@ -5717,29 +5711,33 @@ async function cLoadCarta() {
     if(norm(v(r,'Eliminat'))==='si'||norm(v(r,'Eliminat'))==='yes'||norm(v(r,'Eliminat'))==='1') return;
     const p=norm(v(r,'Participant'));if(!cAllPlayers[p])cAllPlayers[p]=[];cAllPlayers[p].push(r);
   });
+  // Usa les dades ja carregades a l'inici (evita crida extra al servidor)
   try {
-    const res=await cScriptCall({sheet:'Cartes_Jornada'});
-    const rows=res.rows||[];
     const faseSel3 = FASE_SELECCIO||FASE_ACTIVA_GLOBAL;
     const jorSel3  = JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL;
     const isSameJ  = norm(faseSel3)===norm(FASE_ACTIVA_GLOBAL)&&norm(jorSel3)===norm(JORNADA_ACTIVA_GLOBAL);
 
-    // Carta jornada ACTIVA (revelada)
-    const myRowAct = rows.find(r=>norm(r[0])===norm(cParticipant)&&norm(r[1])===norm(FASE_ACTIVA_GLOBAL)&&norm(r[2])===norm(JORNADA_ACTIVA_GLOBAL));
-    const cartaActiva = myRowAct ? {carta:(myRowAct[3]||'').trim(),estat:(myRowAct[4]||'disponible').trim(),detall:(myRowAct[5]||'')} : null;
+    // Llegeix de _cartesGastades (ja carregat a l'inici)
+    const actKey = jKey(FASE_ACTIVA_GLOBAL, JORNADA_ACTIVA_GLOBAL);
+    const selKey = jKey(faseSel3, jorSel3);
+    const cartaActEntry = _cartesGastades[actKey]?.[norm(cParticipant)];
+    const cartaSelEntry = _cartesGastades[selKey]?.[norm(cParticipant)];
 
-    // Carta jornada SELECCIÓ (propera)
-    const myRowSel = isSameJ ? myRowAct : rows.find(r=>norm(r[0])===norm(cParticipant)&&norm(r[1])===norm(faseSel3)&&norm(r[2])===norm(jorSel3));
-    const cartaSeleccio = myRowSel ? {carta:(myRowSel[3]||'').trim(),estat:(myRowSel[4]||'disponible').trim(),detall:(myRowSel[5]||'')} : null;
+    const cartaActiva   = cartaActEntry ? {carta: cartaActEntry.carta, estat:'gastada', detall: JSON.stringify(cartaActEntry.detall||{})} : null;
+    const cartaSeleccio = cartaSelEntry ? {carta: cartaSelEntry.carta, estat:'gastada', detall: JSON.stringify(cartaSelEntry.detall||{})} : null;
 
-    // Historial de totes les jornades del participant
-    const historial = rows.filter(r=>norm(r[0])===norm(cParticipant)).map(r=>({
-      fase:r[1],jornada:r[2],carta:r[3]||'',estat:r[4]||'',detall:r[5]||''
-    }));
+    // Historial: totes les jornades del participant
+    const historial = [];
+    for (const [slotK, slotV] of Object.entries(_cartesGastades)) {
+      const entry = slotV[norm(cParticipant)];
+      if (!entry) continue;
+      const [fH, jH] = slotK.split('_');
+      historial.push({fase: fH, jornada: jH.toUpperCase(), carta: entry.carta||'', estat:'gastada', detall: JSON.stringify(entry.detall||{})});
+    }
 
     cCartaData = isSameJ
-      ? (cartaActiva || {carta:null,estat:'sense_carta'})
-      : (cartaSeleccio || {carta:null,estat:'sense_carta'});
+      ? (cartaActiva || {carta:null, estat:'sense_carta'})
+      : (cartaSeleccio || {carta:null, estat:'sense_carta'});
 
     cRenderCartaDual(cartaActiva, cartaSeleccio, historial, isSameJ, faseSel3, jorSel3);
   } catch(e){el.innerHTML=`<div style="text-align:center;padding:2rem;color:#F87171">Error: ${e.message}</div>`;}
@@ -6132,52 +6130,53 @@ function cConfirmar(params){
   document.body.appendChild(modal);
 }
 async function cGastar(params){
-  document.getElementById('cartesTabContent').innerHTML='<div style="text-align:center;padding:3rem"><div class="spinner"></div></div>';
-  // Si és anular jugador rival, tria el jugador ara (moment irreversible)
+  // Actualitza UI immediatament (optimistic)
+  const cartaReal = (cCartaData.carta==='Comodi' && cComodiSel && cComodiSel!=='Comodi') ? cComodiSel : params.carta;
+  const esComodi  = cCartaData.carta==='Comodi' && cComodiSel && cComodiSel!=='Comodi';
+  params.carta = cartaReal;
+  params.via_comodi = esComodi ? true : undefined;
+
+  // Si és anular jugador rival, tria el jugador ara
   if(params.carta==='Anular jugador rival' && params.rival && !params.jugador){
     const rivalPls=cAllPlayers[norm(params.rival)]||[];
     if(rivalPls.length) params.jugador=v(rivalPls[Math.floor(Math.random()*rivalPls.length)],'Jugador');
   }
-  // Si és Comodi: la carta real és la triada (cComodiSel), el Comodi és el "vehicle"
-  const cartaReal = (cCartaData.carta==='Comodi' && cComodiSel && cComodiSel!=='Comodi') ? cComodiSel : params.carta;
-  const esComodi  = cCartaData.carta==='Comodi' && cComodiSel && cComodiSel!=='Comodi';
-  params.carta = cartaReal; // actua com si tingués la carta real
-  params.via_comodi = esComodi ? true : undefined;
-  try{await cScriptCall({action:'gastar_carta_jornada',participant:cParticipant,carta:cartaReal,fase:FASE_SELECCIO||FASE_ACTIVA_GLOBAL,jornada:JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL,detall:JSON.stringify(params)});}catch(e){console.warn(e);}
+
+  // Actualitza estat local immediatament
   cCartaData.estat='gastada';
-  // Guarda la carta real (no Comodi) a _cartesGastades, a l'slot de la jornada de selecció
   const cSlotKey = jKey(FASE_SELECCIO||FASE_ACTIVA_GLOBAL, JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL);
   if(!_cartesGastades[cSlotKey]) _cartesGastades[cSlotKey] = {};
   _cartesGastades[cSlotKey][norm(cParticipant)]={carta:cartaReal,detall:params};
-  // Log: mostra "Comodi → [carta real]" si escau
   const logCarta = esComodi ? `Comodi → ${cartaReal}` : cartaReal;
-  // Substitueix entrada existent del participant (no duplicar)
   const logIcon = esComodi ? ('🃏→'+(CARTES_DEF[cartaReal]?.icon||'⭐')) : (CARTES_DEF[cartaReal]?.icon||'🃏');
   const logEntry = {participant:cParticipant, carta:logCarta, detall:params, icon:logIcon};
   const existIdx = _cartesLog.findIndex(l=>norm(l.participant)===norm(cParticipant));
   if(existIdx>=0) _cartesLog[existIdx]=logEntry; else _cartesLog.push(logEntry);
-  // Reset comodi selection
-  cComodiSel = '';
-  // Carta Doble capita: registra el 2n capità
-  if(params.carta==='Doble capita' && params.jugador){
-    window._dcSpinResult = null; // reset per si es torna a obrir
-  }
-  // Carta Capita manual: actualitza _capitansMap (a l'slot de la jornada de selecció) i guarda al Sheet de Capitans
+
+  // Capità manual: actualitza mapa local
   if(params.carta==='Capita manual' && params.jugador){
     if(!_capitansMap[cSlotKey]) _capitansMap[cSlotKey] = {};
     _capitansMap[cSlotKey][norm(cParticipant)] = params.jugador;
-    // Guarda al Sheet de Capitans (mateixa acció que la ruleta), per a la jornada de selecció
-    try {
-      await rPost({action:'set_capita', participant:cParticipant, fase:FASE_SELECCIO||FASE_ACTIVA_GLOBAL, jornada:JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL, capita:params.jugador});
-    } catch(e) { console.warn('Error guardant capità manual:', e); }
   }
-  clearCache();renderRanking();
+
+  cComodiSel = '';
+  clearCache(); renderRanking();
   cRenderCarta();
-  // Si anular jugador, mostra reveal del jugador triat
+
   if(params.carta==='Anular jugador rival' && params.jugador){
     showToast(`❌ Jugador anulat: ${params.jugador}`);
   } else {
-    showToast('Carta gastada!');
+    showToast('🃏 Carta gastada!');
+  }
+
+  // Envia al server en segon pla
+  cScriptCall({action:'gastar_carta_jornada',participant:cParticipant,carta:cartaReal,fase:FASE_SELECCIO||FASE_ACTIVA_GLOBAL,jornada:JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL,detall:JSON.stringify(params)})
+    .catch(e => console.warn('Error guardant carta:', e));
+
+  // Capità manual: guarda al Sheet en segon pla
+  if(params.carta==='Capita manual' && params.jugador){
+    rPost({action:'set_capita', participant:cParticipant, fase:FASE_SELECCIO||FASE_ACTIVA_GLOBAL, jornada:JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL, capita:params.jugador})
+      .catch(e => console.warn('Error guardant capità manual:', e));
   }
 }
 async function cResetCarta(){
