@@ -5451,10 +5451,16 @@ function rDoSpin() {
 }
 
 async function rSaveCapita(jugador, rPlayers) {
-  const faseSave   = FASE_SELECCIO   || FASE_ACTIVA_GLOBAL;
+  const faseSave    = FASE_SELECCIO   || FASE_ACTIVA_GLOBAL;
   const jornadaSave = JORNADA_SELECCIO || JORNADA_ACTIVA_GLOBAL;
 
-  // Actualitza UI immediatament (optimistic)
+  // Mostra feedback immediat
+  showToast('⏳ Guardant capità...');
+
+  try {
+    await rPost({action:'set_capita', participant:rParticipant, fase:faseSave, jornada:jornadaSave, capita:jugador});
+  } catch(e) { console.warn('Error guardant capità:', e); }
+
   rSpinResult = jugador;
   if (norm(faseSave)===norm(FASE_ACTIVA_GLOBAL) && norm(jornadaSave)===norm(JORNADA_ACTIVA_GLOBAL) && JORNADA_REVELADA) {
     const activeKey = jKey(FASE_ACTIVA_GLOBAL, JORNADA_ACTIVA_GLOBAL);
@@ -5464,10 +5470,6 @@ async function rSaveCapita(jugador, rPlayers) {
   clearCache(); renderRanking();
   rRenderMain(rPlayers, jugador, jugador, []);
   showToast('⭐ Capità assignat: ' + jugador);
-
-  // Envia al server en segon pla (sense bloquejar la UI)
-  rPost({action:'set_capita', participant:rParticipant, fase:faseSave, jornada:jornadaSave, capita:jugador})
-    .catch(e => console.warn('Error guardant capità:', e));
 }
 
 async function rResetCapita() {
@@ -6130,53 +6132,50 @@ function cConfirmar(params){
   document.body.appendChild(modal);
 }
 async function cGastar(params){
-  // Actualitza UI immediatament (optimistic)
-  const cartaReal = (cCartaData.carta==='Comodi' && cComodiSel && cComodiSel!=='Comodi') ? cComodiSel : params.carta;
-  const esComodi  = cCartaData.carta==='Comodi' && cComodiSel && cComodiSel!=='Comodi';
-  params.carta = cartaReal;
-  params.via_comodi = esComodi ? true : undefined;
-
   // Si és anular jugador rival, tria el jugador ara
   if(params.carta==='Anular jugador rival' && params.rival && !params.jugador){
     const rivalPls=cAllPlayers[norm(params.rival)]||[];
     if(rivalPls.length) params.jugador=v(rivalPls[Math.floor(Math.random()*rivalPls.length)],'Jugador');
   }
+  const cartaReal = (cCartaData.carta==='Comodi' && cComodiSel && cComodiSel!=='Comodi') ? cComodiSel : params.carta;
+  const esComodi  = cCartaData.carta==='Comodi' && cComodiSel && cComodiSel!=='Comodi';
+  params.carta = cartaReal;
+  params.via_comodi = esComodi ? true : undefined;
 
-  // Actualitza estat local immediatament
+  // Mostra feedback immediat i spinner petit
+  const el = document.getElementById('cartesTabContent');
+  const btnConf = document.querySelector('[onclick*="cGastar"]');
+  if(btnConf) { btnConf.disabled=true; btnConf.textContent='⏳ Guardant...'; }
+
+  try {
+    await cScriptCall({action:'gastar_carta_jornada', participant:cParticipant, carta:cartaReal, fase:FASE_SELECCIO||FASE_ACTIVA_GLOBAL, jornada:JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL, detall:JSON.stringify(params)});
+  } catch(e) { console.warn('Error guardant carta:', e); }
+
   cCartaData.estat='gastada';
   const cSlotKey = jKey(FASE_SELECCIO||FASE_ACTIVA_GLOBAL, JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL);
   if(!_cartesGastades[cSlotKey]) _cartesGastades[cSlotKey] = {};
-  _cartesGastades[cSlotKey][norm(cParticipant)]={carta:cartaReal,detall:params};
+  _cartesGastades[cSlotKey][norm(cParticipant)]={carta:cartaReal, detall:params};
   const logCarta = esComodi ? `Comodi → ${cartaReal}` : cartaReal;
   const logIcon = esComodi ? ('🃏→'+(CARTES_DEF[cartaReal]?.icon||'⭐')) : (CARTES_DEF[cartaReal]?.icon||'🃏');
   const logEntry = {participant:cParticipant, carta:logCarta, detall:params, icon:logIcon};
   const existIdx = _cartesLog.findIndex(l=>norm(l.participant)===norm(cParticipant));
   if(existIdx>=0) _cartesLog[existIdx]=logEntry; else _cartesLog.push(logEntry);
+  cComodiSel = '';
 
-  // Capità manual: actualitza mapa local
   if(params.carta==='Capita manual' && params.jugador){
     if(!_capitansMap[cSlotKey]) _capitansMap[cSlotKey] = {};
     _capitansMap[cSlotKey][norm(cParticipant)] = params.jugador;
+    try {
+      await rPost({action:'set_capita', participant:cParticipant, fase:FASE_SELECCIO||FASE_ACTIVA_GLOBAL, jornada:JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL, capita:params.jugador});
+    } catch(e) { console.warn('Error guardant capità manual:', e); }
   }
 
-  cComodiSel = '';
   clearCache(); renderRanking();
   cRenderCarta();
-
   if(params.carta==='Anular jugador rival' && params.jugador){
     showToast(`❌ Jugador anulat: ${params.jugador}`);
   } else {
     showToast('🃏 Carta gastada!');
-  }
-
-  // Envia al server en segon pla
-  cScriptCall({action:'gastar_carta_jornada',participant:cParticipant,carta:cartaReal,fase:FASE_SELECCIO||FASE_ACTIVA_GLOBAL,jornada:JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL,detall:JSON.stringify(params)})
-    .catch(e => console.warn('Error guardant carta:', e));
-
-  // Capità manual: guarda al Sheet en segon pla
-  if(params.carta==='Capita manual' && params.jugador){
-    rPost({action:'set_capita', participant:cParticipant, fase:FASE_SELECCIO||FASE_ACTIVA_GLOBAL, jornada:JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL, capita:params.jugador})
-      .catch(e => console.warn('Error guardant capità manual:', e));
   }
 }
 async function cResetCarta(){
