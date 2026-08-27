@@ -1348,7 +1348,7 @@ function getSuplentRobat(participant, fase, jornada) {
   // Busca si aquest participant té la carta "Suplent Extra" aplicada
   const cartes = cartesSlot(fase, jornada);
   const carta = cartes[norm(participant)];
-  if (!carta || carta.carta !== 'Suplent Extra') { _cache[k] = null; return null; }
+  if (!carta || normCartaNom(carta.carta) !== 'Suplent Extra') { _cache[k] = null; return null; }
   const rivalNorm = norm(carta.detall?.rival || '');
   if (!rivalNorm) { _cache[k] = null; return null; }
   // Busca el suplent del rival
@@ -1383,7 +1383,7 @@ function isSuplentRobat(participant, fase, jornada) {
   const cartes = cartesSlot(fase, jornada);
   const lladre = getParticipants().find(p => {
     const c = cartes[norm(p)];
-    return c && c.carta === 'Suplent Extra' && norm(c.detall?.rival||'') === norm(participant);
+    return c && normCartaNom(c.carta) === 'Suplent Extra' && norm(c.detall?.rival||'') === norm(participant);
   });
   _cache[k] = lladre || null;
   return _cache[k];
@@ -4767,8 +4767,8 @@ async function reloadData() {
       if(!nom||!fase||!jornada) return;
       if(norm(v(r,'Carta_Estat'))!=='gastada') return;
       let d={};try{d=JSON.parse(v(r,'Carta_Detall'));}catch(e){}
-      const cartaSheet=v(r,'Carta');
-      const cartaEf=(norm(cartaSheet)==='comodi'&&d?.carta&&d.carta!=='Comodi')?d.carta:cartaSheet;
+      const cartaSheet = normCartaNom(v(r,'Carta'));
+      const cartaEf = (norm(cartaSheet)==='comodi'&&d?.carta&&d.carta!=='Comodi') ? normCartaNom(d.carta) : cartaSheet;
       const esC=norm(cartaSheet)==='comodi'&&cartaEf!==cartaSheet;
       const slotKey = jKey(fase, jornada);
       if(!_cartesGastades[slotKey]) _cartesGastades[slotKey] = {};
@@ -5406,7 +5406,8 @@ function rDoSpin() {
   if (rSpinResult) { showToast('Ja tens capità assignat per aquesta jornada!'); return; }
   const rFaseSelSpin = FASE_SELECCIO || FASE_ACTIVA_GLOBAL;
   const rJornSelSpin = JORNADA_SELECCIO || JORNADA_ACTIVA_GLOBAL;
-  const rPlayers = filterActius(getPlayersForPhase(rParticipant, rFaseSelSpin, rJornSelSpin));
+  const rPlayers = filterActius(getPlayersForPhase(rParticipant, rFaseSelSpin, rJornSelSpin))
+    .filter(pl => norm(getRolEfectiu(pl, rFaseSelSpin, rJornSelSpin)) !== 'sup');
   if (!rPlayers.length) return;
   rSpinning = true;
 
@@ -5656,6 +5657,13 @@ const C_PASSWORDS = {
   'FC SAVERIUS':       'waterpolo7034',
   'THEMARKMACK':       'Messi10',
 };
+// Normalitza el nom d'una carta contra CARTES_DEF (per toleràr diferències majúsc/minúsc del Sheet)
+function normCartaNom(nom) {
+  if (!nom) return nom;
+  const key = Object.keys(CARTES_DEF).find(k => norm(k) === norm(nom));
+  return key || nom; // retorna el nom canònic o el que ve si no es troba
+}
+
 const CARTES_DEF = {
   'Capita x3':          {icon:'👑',color:'#F5C842',desc:'El teu capità puntua ×3 durant la jornada activa.',accio:'capita_x4'},
   'Anular capita rival':{icon:'🚫',color:'#F87171',desc:"El capità del rival escollit puntua ×1 aquella jornada.",accio:'anular_capita_rival'},
@@ -6034,7 +6042,7 @@ function cRenderComodi(){
 function cSelectComodi(carta){cComodiSel=carta;cRenderCarta();}
 function cInitSelectors(){
   const upd=(a,b)=>{const riv=document.getElementById(a)?.value;const sel=document.getElementById(b);if(!sel||!riv)return;const pls=(cAllPlayers[norm(riv)]||[]).filter(p=>norm(getRolEfectiu(p,cFase,cJorn))!=='sup');sel.innerHTML=pls.map(p=>`<option value="${esc(v(p,'Jugador'))}">${v(p,'Jugador')} (${v(p,'Equip')})</option>`).join('');};
-  upd('aj_rival','aj_jugador');upd('cjr_rival','cjr_jugador_rival');
+  setTimeout(()=>{upd('aj_rival','aj_jugador');upd('cjr_rival','cjr_jugador_rival');},50);
   document.getElementById('aj_rival')?.addEventListener('change',()=>upd('aj_rival','aj_jugador'));
   document.getElementById('cjr_rival')?.addEventListener('change',()=>upd('cjr_rival','cjr_jugador_rival'));
 }
