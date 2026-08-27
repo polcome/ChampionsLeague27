@@ -5713,33 +5713,36 @@ async function cLoadCarta() {
     if(norm(v(r,'Eliminat'))==='si'||norm(v(r,'Eliminat'))==='yes'||norm(v(r,'Eliminat'))==='1') return;
     const p=norm(v(r,'Participant'));if(!cAllPlayers[p])cAllPlayers[p]=[];cAllPlayers[p].push(r);
   });
-  // Usa les dades ja carregades a l'inici (evita crida extra al servidor)
   try {
     const faseSel3 = FASE_SELECCIO||FASE_ACTIVA_GLOBAL;
     const jorSel3  = JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL;
     const isSameJ  = norm(faseSel3)===norm(FASE_ACTIVA_GLOBAL)&&norm(jorSel3)===norm(JORNADA_ACTIVA_GLOBAL);
 
-    // Llegeix de _cartesGastades (ja carregat a l'inici)
-    const actKey = jKey(FASE_ACTIVA_GLOBAL, JORNADA_ACTIVA_GLOBAL);
-    const selKey = jKey(faseSel3, jorSel3);
-    const cartaActEntry = _cartesGastades[actKey]?.[norm(cParticipant)];
-    const cartaSelEntry = _cartesGastades[selKey]?.[norm(cParticipant)];
+    // Llegeix Cartes_Jornada del Sheet per veure disponibles + gastades
+    const res=await cScriptCall({sheet:'Cartes_Jornada'});
+    const rows=res.rows||[];
 
-    const cartaActiva   = cartaActEntry ? {carta: cartaActEntry.carta, estat:'gastada', detall: JSON.stringify(cartaActEntry.detall||{})} : null;
-    const cartaSeleccio = cartaSelEntry ? {carta: cartaSelEntry.carta, estat:'gastada', detall: JSON.stringify(cartaSelEntry.detall||{})} : null;
+    const myRowAct = rows.find(r=>norm(r[0])===norm(cParticipant)&&norm(r[1])===norm(FASE_ACTIVA_GLOBAL)&&norm(r[2])===norm(JORNADA_ACTIVA_GLOBAL));
+    const cartaActiva = myRowAct ? {carta:(myRowAct[3]||'').trim(),estat:(myRowAct[4]||'disponible').trim(),detall:(myRowAct[5]||'')} : null;
 
-    // Historial: totes les jornades del participant
-    const historial = [];
-    for (const [slotK, slotV] of Object.entries(_cartesGastades)) {
-      const entry = slotV[norm(cParticipant)];
-      if (!entry) continue;
-      const [fH, jH] = slotK.split('_');
-      historial.push({fase: fH, jornada: jH.toUpperCase(), carta: entry.carta||'', estat:'gastada', detall: JSON.stringify(entry.detall||{})});
-    }
+    const myRowSel = isSameJ ? myRowAct : rows.find(r=>norm(r[0])===norm(cParticipant)&&norm(r[1])===norm(faseSel3)&&norm(r[2])===norm(jorSel3));
+    const cartaSeleccio = myRowSel ? {carta:(myRowSel[3]||'').trim(),estat:(myRowSel[4]||'disponible').trim(),detall:(myRowSel[5]||'')} : null;
+
+    const historial = rows.filter(r=>norm(r[0])===norm(cParticipant)).map(r=>({
+      fase:r[1],jornada:r[2],carta:r[3]||'',estat:r[4]||'',detall:r[5]||''
+    }));
 
     cCartaData = isSameJ
-      ? (cartaActiva || {carta:null, estat:'sense_carta'})
-      : (cartaSeleccio || {carta:null, estat:'sense_carta'});
+      ? (cartaActiva || {carta:null,estat:'sense_carta'})
+      : (cartaSeleccio || {carta:null,estat:'sense_carta'});
+
+    // Sincronitza _cartesGastades amb les gastades del sheet
+    rows.filter(r=>norm(r[4])==='gastada').forEach(r=>{
+      const slotK=jKey(r[1],r[2]);
+      if(!_cartesGastades[slotK]) _cartesGastades[slotK]={};
+      let d={};try{d=JSON.parse(r[5]);}catch(e){}
+      _cartesGastades[slotK][norm(r[0])]={carta:normCartaNom(r[3]),detall:d};
+    });
 
     cRenderCartaDual(cartaActiva, cartaSeleccio, historial, isSameJ, faseSel3, jorSel3);
   } catch(e){el.innerHTML=`<div style="text-align:center;padding:2rem;color:#F87171">Error: ${e.message}</div>`;}
