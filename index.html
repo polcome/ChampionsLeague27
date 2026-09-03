@@ -1287,7 +1287,8 @@ function getQuinielaPts(participant, fase, jornada) {
     const sel = v(r, participant) || '';
     return sel && sel === v(r,'Resultat');
   }).length;
-  const pts = encerts === partits.length ? 10 : 0;
+  // 5/5 = 10pts, 4/5 = 5pts, 3/5 = 2pts, resta = 0pts
+  const pts = encerts >= 5 ? 10 : encerts === 4 ? 5 : encerts === 3 ? 2 : 0;
   _cache[k] = pts;
   return pts;
 }
@@ -1397,8 +1398,22 @@ function getEntrenadorPts(participant, fase, jornada) {
     norm(v(r,'Jornada')) === norm(jornada)
   );
   if (!row) return 0;
-  const pts = parseFloat(v(row,'Punts'));
+  const raw = v(row,'Punts');
+  if (raw === '' || raw === null || raw === undefined) return 0;
+  const pts = parseFloat(raw);
   return isNaN(pts) ? 0 : pts;
+}
+
+function hasEntrenadorPts(participant, fase, jornada) {
+  if (!_entrenadors.length) return false;
+  const row = _entrenadors.find(r =>
+    norm(v(r,'Participant')) === norm(participant) &&
+    norm(v(r,'Fase')) === norm(fase) &&
+    norm(v(r,'Jornada')) === norm(jornada)
+  );
+  if (!row) return false;
+  const raw = v(row,'Punts');
+  return raw !== '' && raw !== null && raw !== undefined && !isNaN(parseFloat(raw));
 }
 
 function getEntrenadorInfo(participant) {
@@ -2196,7 +2211,7 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
     const a2 = sc2 ? parseInt(v(sc2,'Assistencies')||0) : 0;
     const pts2 = supActiuList ? (calcScoreRow(sc2, pos2orig, name, phase, jornada, participant) || 0) : 0;
     const cls2 = note2===null?'score-empty':note2>=8?'score-high':note2>=6.5?'score-mid':'score-low';
-    const flag2 = getFlag(v(pl,'Equip'));
+    const flag2 = getClubBadge(v(pl,'Equip'));
     const noJugat2 = sc2 && noHaJugat(sc2);
     const detailId = `detail-sup-${participant.replace(/\s/g,'-')}-${phase}-${jornada}-${plIdx}`;
     const bonusChips = [];
@@ -3833,7 +3848,7 @@ function renderJugadorsTab() {
     // Si filtrem per equip fantasy i el jugador no ha puntuat per a ell, saltem
     if (filterEquip && !hasPuntuat) continue;
     if (phaseDetails.length === 0 && filterFase) continue;
-    if (!hasPuntuat && phaseDetails.length === 0) continue; // mai ha puntuat, no mostrar
+    // Mostrem tots els jugadors de la plantilla, tinguin o no puntuació
 
     // Participant vigent: el que el té ACTUALMENT amb Eliminat=NO
     // Si tots estan eliminats → "Sense Equip"
@@ -3957,7 +3972,7 @@ function renderJugadorsTab() {
       <td>${r.totalDobleGroga||'—'}</td>
       <td>${r.totalVermella||'—'}</td>
       <td style="font-family:'Space Mono',monospace;font-size:0.78rem">${r.notaMitjana>0?r.notaMitjana.toFixed(1):'—'}</td>
-      <td>${r.totalPts}</td>
+      <td style="font-family:'Bebas Neue',cursive;font-size:1.1rem;color:${r.totalPts>0?'var(--gold)':'var(--silver)'}">${r.totalPts>0?r.totalPts:'—'}</td>
     </tr>
     <tr class="jug-detail" id="${detailId}">
       <td colspan="12" style="padding:0.8rem 1.2rem 1rem 1.2rem;background:rgba(0,0,0,0.25);border-radius:0 0 8px 8px">${detailContent}</td>
@@ -4198,7 +4213,7 @@ function renderQuinielaNominated(el, partits, fase, jorn, jornLabel) {
       if (seleccions[key] && seleccions[key] === v(r,'Resultat')) encerts++;
     });
   }
-  const ptsGuanyats = (jaTancada && encerts === partits.length) ? 10 : 0;
+  const ptsGuanyats = encerts >= 5 ? 10 : encerts === 4 ? 5 : encerts === 3 ? 2 : 0;
 
   let html = `<div class="info-banner"><span class="icon">🎯</span><div><strong>Quiniela ${jornLabel}</strong> — ${p}${jaTancada?` · ${encerts}/${partits.length} encerts${ptsGuanyats?` · <span style="color:#4ADE80">+${ptsGuanyats} pts!</span>`:''}`:''}</div>
     <button onclick="_quinielaAuth=false;_quinielaSeleccions={};renderQuinielaTab()" style="margin-left:auto;background:none;border:1px solid var(--glass-border);color:var(--silver);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:0.75rem">Sortir</button>
@@ -4219,6 +4234,13 @@ function renderQuinielaNominated(el, partits, fase, jorn, jornLabel) {
       <div style="font-size:0.75rem;color:var(--silver);margin-top:0.5rem;opacity:0.7">⚠️ Un cop enviada, no es pot modificar (tret que l'admin ho esborri manualment).</div>
     </div>`;
   } else if (!jaTancada && !jaEnviadaSheet) {
+    html += `<div style="background:rgba(255,255,255,0.03);border:1px solid var(--glass-border);border-radius:10px;padding:0.7rem 1rem;margin-bottom:0.8rem;display:flex;gap:1rem;flex-wrap:wrap;align-items:center">
+      <span style="font-size:0.72rem;color:var(--silver);font-weight:700;letter-spacing:0.05em">BAREM:</span>
+      <span style="font-size:0.78rem"><strong style="color:#4ADE80">5/5</strong> <span style="color:var(--silver)">→ +10 pts</span></span>
+      <span style="font-size:0.78rem"><strong style="color:#FBBF24">4/5</strong> <span style="color:var(--silver)">→ +5 pts</span></span>
+      <span style="font-size:0.78rem"><strong style="color:#60A5FA">3/5</strong> <span style="color:var(--silver)">→ +2 pts</span></span>
+      <span style="font-size:0.78rem"><strong style="color:rgba(255,255,255,0.3)">≤2/5</strong> <span style="color:var(--silver)">→ 0 pts</span></span>
+    </div>`;
     html += `<p style="color:var(--silver);font-size:0.82rem;margin-bottom:1rem">Selecciona el resultat de cada partit i envia la teva quiniela. <strong style="color:#F87171">Un cop enviada no es pot modificar.</strong></p>`;
   } else if (!jaTancada) {
     html += `<div style="background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:8px;padding:0.7rem 1rem;margin-bottom:1rem;font-size:0.82rem;color:#F87171">🔒 La quiniela està tancada per a aquesta jornada.</div>`;
@@ -4286,10 +4308,12 @@ function renderQuinielaNominated(el, partits, fase, jorn, jornLabel) {
         const sels2 = partits.map(r => v(r,pp)||'—');
         const ress2 = partits.map(r => v(r,'Resultat')||'');
         const enc2 = sels2.filter((s,i)=>s===ress2[i]&&s!=='—').length;
+        const pts2 = enc2>=5?10:enc2===4?5:enc2===3?2:0;
+        const ptsColor = pts2>=10?'#4ADE80':pts2>=5?'#FBBF24':pts2>=2?'#60A5FA':'var(--silver)';
         return `<tr ${pp===p?'style="background:rgba(30,100,220,0.1)"':''}>
-          <td style="font-weight:${pp===p?'700':'400'}">${pp}</td>
+          <td style="font-size:0.8rem;font-weight:${pp===p?'700':'400'}">${pp}</td>
           ${sels2.map((s,i)=>`<td style="text-align:center;color:${s===ress2[i]&&s!=='—'?'#4ADE80':s!=='—'?'#F87171':'var(--silver)'}">${s} ${s===ress2[i]&&s!=='—'?'✅':s!=='—'?'❌':''}</td>`).join('')}
-          <td style="text-align:center;font-weight:700;color:${enc2===partits.length?'#4ADE80':'var(--white)'}">${enc2}/${partits.length}${enc2===partits.length?' 🏆':''}</td>
+          <td style="text-align:center;font-weight:700;color:${ptsColor}">${enc2}/${partits.length} ${pts2>0?`<span style="font-size:0.7rem">(+${pts2}pts)</span>`:''}</td>
         </tr>`;
       }).join('')}
       </tbody></table></div></div>`;
@@ -4369,7 +4393,7 @@ const Q_PASSWORDS = {
   'COCODRILS':         'Bandana123',
   'ADAMROSVIKOVIC69':  'Fantasy123',
   'FC SAVERIUS':       'waterpolo7034',
-  'SR GAMI':           '',
+  'SR GAMI':           'Realmadrid15',
 };
 
 // ============================================================
@@ -4959,17 +4983,17 @@ function showToast(msg) {
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwe7egYwCGNeAWMKQEW8g7ncGlg3XPIP4HMJy6f8Bp9gz7n4HmfM1713uQMLu8nxGYv/exec';
 
 const R_PASSWORDS = {
-  'NTNP':              'ntnp1302',
   'MBEMBA':            'siesta1999',
-  'PAPALUUKAS FC':     'Papi1234@',
+  'NTNP':              'ntnp1302',
   'TETPEÑA':           'APG',
+  'PAPALUUKAS FC':     'Papi1234@',
   'POLILLAS':          'polfantasy1',
-  'FERGRAM FC':        'Ferranqr21',
-  'AGUTROT CF':           'policho1234',
+  'BICHOS FC':         '',
+  'AGUTROT CF':        'policho1234',
   'COCODRILS':         'Bandana123',
   'ADAMROSVIKOVIC69':  'Fantasy123',
   'FC SAVERIUS':       'waterpolo7034',
-  'THEMARKMACK':       'Messi10',
+  'SR GAMI':           'Realmadrid15',
 };
 
 
@@ -5641,17 +5665,17 @@ function getJugadorEfectiu(participant, jugador, fase, jornada) {
 // ============================================================
 const C_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwe7egYwCGNeAWMKQEW8g7ncGlg3XPIP4HMJy6f8Bp9gz7n4HmfM1713uQMLu8nxGYv/exec';
 const C_PASSWORDS = {
-  'NTNP':              'ntnp1302',
   'MBEMBA':            'siesta1999',
-  'PAPALUUKAS FC':     'Papi1234@',
+  'NTNP':              'ntnp1302',
   'TETPEÑA':           'APG',
+  'PAPALUUKAS FC':     'Papi1234@',
   'POLILLAS':          'polfantasy1',
-  'FERGRAM FC':        'Ferranqr21',
-  'AGUTROT CF':           'policho1234',
+  'BICHOS FC':         '',
+  'AGUTROT CF':        'policho1234',
   'COCODRILS':         'Bandana123',
   'ADAMROSVIKOVIC69':  'Fantasy123',
   'FC SAVERIUS':       'waterpolo7034',
-  'THEMARKMACK':       'Messi10',
+  'SR GAMI':           'Realmadrid15',
 };
 // Normalitza el nom d'una carta contra CARTES_DEF (per toleràr diferències majúsc/minúsc del Sheet)
 function normCartaNom(nom) {
