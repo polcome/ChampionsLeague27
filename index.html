@@ -1314,10 +1314,11 @@ function isSuplentActiu(participant, fase, jornada) {
   const k = `supactiu_${participant}_${fase}_${jornada}`;
   if (_cache[k] !== undefined) return _cache[k];
   const titulars = getTitulars(participant, fase, jornada);
-  // Actiu NOMÉS si nota === 0 explícit (ha jugat però no ha puntuat / ha jugat poc)
+  // Actiu NOMÉS si la nota efectiva del slot === 0 explícit
+  // (el jugador efectiu — que pot ser el rebut per canvi — no ha jugat)
   // Buit = equip encara no ha jugat → NO activa el suplent
   const result = titulars.some(pl => {
-    const sc = getScore(participant, v(pl,'Jugador'), fase, jornada);
+    const sc = getScoreEfectiu(participant, v(pl,'Jugador'), fase, jornada);
     if (!sc || v(sc,'Nota') === '' || v(sc,'Nota') === null || v(sc,'Nota') === undefined) return false;
     const nota = parseNota(v(sc,'Nota'));
     return nota === 0; // exactament 0, no absent
@@ -1326,13 +1327,42 @@ function isSuplentActiu(participant, fase, jornada) {
   return result;
 }
 
+// Retorna el primer titular el slot del qual té nota efectiva === 0
+// (pot ser el titular original o el jugador rebut per canvi que tampoc juga)
+function getTitularSubstituit(participant, fase, jornada) {
+  const k = `titsub_${participant}_${fase}_${jornada}`;
+  if (_cache[k] !== undefined) return _cache[k];
+  const titulars = getTitulars(participant, fase, jornada);
+  const substituit = titulars.find(pl => {
+    const sc = getScoreEfectiu(participant, v(pl,'Jugador'), fase, jornada);
+    if (!sc || v(sc,'Nota') === '' || v(sc,'Nota') === null || v(sc,'Nota') === undefined) return false;
+    return parseNota(v(sc,'Nota')) === 0;
+  });
+  _cache[k] = substituit || null;
+  return _cache[k];
+}
+
 function getSuplentPts(participant, fase, jornada) {
   const k = `suppts_${participant}_${fase}_${jornada}`;
   if (_cache[k] !== undefined) return _cache[k];
   const sup = getSuplent(participant, fase, jornada);
   if (!sup || !isSuplentActiu(participant, fase, jornada)) { _cache[k] = 0; return 0; }
+
+  // El suplent entra per el primer titular que no ha jugat.
+  // Hereta TOT el que tenia aplicat aquell slot (capità, doble capità, gol doble,
+  // anulació, etc.) passant el NOM DEL TITULAR SUBSTITUÏT a calcScoreRow,
+  // però usant la PUNTUACIÓ REAL DEL SUPLENT.
+  const titularSub = getTitularSubstituit(participant, fase, jornada);
+  const nomSlot = titularSub ? v(titularSub,'Jugador') : v(sup,'Jugador');
+
+  // Puntuació real del suplent
   const sc = getScoreEfectiu(participant, v(sup,'Jugador'), fase, jornada);
-  const result = calcScoreRow(sc, v(sup,'Posicio'), v(sup,'Jugador'), fase, jornada, participant) || 0;
+  if (!sc || v(sc,'Nota') === '' || v(sc,'Nota') === null) { _cache[k] = 0; return 0; }
+  if (noHaJugat(sc)) { _cache[k] = 0; return 0; }
+
+  // Construïm un sc "fictici" amb les dades del suplent però passem el nom del slot
+  // per a que calcScoreRow apliqui els efectes del titular (capità, cartes, etc.)
+  const result = calcScoreRow(sc, v(sup,'Posicio'), nomSlot, fase, jornada, participant) || 0;
   _cache[k] = result;
   return result;
 }
@@ -2283,7 +2313,13 @@ function renderPitch(participant, phase, jornada, tryJ1Fallback) {
     </div>`;
 
   const supColorR = lladreNom ? '#F87171' : (supActiuR?'#F59E0B':'rgba(255,255,255,0.2)');
-  const supBadgeR = lladreNom ? `🚨 ROBAT per ${lladreNom}` : (supActiuR?'▶ ACTIU':'');
+  // Comprova si el suplent hereta el capità del titular substituït
+  const titSubR = supActiuR ? getTitularSubstituit(participant, phase, jornada) : null;
+  const capSlot = capitansSlot(phase, jornada)[norm(participant)];
+  const suplentHeretaCap = titSubR && capSlot && norm(v(titSubR,'Jugador')) === norm(capSlot);
+  const suplentHeretaDobleCap = titSubR && !suplentHeretaCap && isSegonCapita(participant, v(titSubR,'Jugador'), phase, jornada);
+  const supBadgeR = lladreNom ? `🚨 ROBAT per ${lladreNom}` :
+    supActiuR ? (suplentHeretaCap ? `▶ ACTIU ⭐ Cap` : suplentHeretaDobleCap ? `▶ ACTIU ⭐` : '▶ ACTIU') : '';
   const supPinR = supPlR
     ? makeBenchPinR(v(supPlR,'Foto'), v(supPlR,'Jugador'), lladreNom?null:(supActiuR?supPtsR:null), supColorR, supBadgeR, 'sup', `openPlayerCard('${esc(v(supPlR,"Jugador"))}','${esc(participant)}','${phase}','${jornada}')`)
     : `<div style="min-width:64px;text-align:center;opacity:0.25"><div style="width:50px;height:50px;border-radius:50%;border:2px dashed rgba(255,255,255,0.2);margin:0 auto;display:flex;align-items:center;justify-content:center">👤</div><div style="font-size:0.52rem;color:var(--silver);margin-top:6px;text-transform:uppercase">Suplent</div></div>`;
