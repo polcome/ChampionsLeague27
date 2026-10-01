@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="UCL Fantasy">
+<link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -556,8 +557,8 @@
       </select>
       <select id="filterFase" onchange="renderJugadorsTab()" style="background:rgba(255,255,255,0.07);border:1px solid var(--glass-border);border-radius:6px;padding:0.4rem 0.7rem;color:var(--white);font-size:0.82rem">
         <option value="">Totes les fases</option>
-        <option value="lliga">Fase de Grups</option>
-        <option value="r8">16ens</option>
+        <option value="lliga">Fase de Lliga</option>
+        <option value="playoff">16ens</option>
         <option value="r8">Vuitens</option>
         <option value="qf">Quarts</option>
         <option value="sf">Semifinals</option>
@@ -637,12 +638,7 @@ let FASE_SELECCIO = null;   // fase per a la qual podem fer la selecció (pot se
 let JORNADA_SELECCIO = null; // jornada per a la qual podem fer la selecció
 let _cartesLog = []; // registre públic de cartes usades
 
-// Hash SHA-256 de la contrasenya admin (més segur que text pla)
-// Contrasenya per defecte: "mundial2026admin"
-// Per canviar-la: https://emn178.github.io/online-tools/sha256.html
-const ADMIN_PASS_HASH = 'a8c9b8f3e2e9c9a1c3b2d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5';
-
-// Contrasenya real (en text, per simplicitat entre amics — pots usar el hash si vols més seguretat)
+// Contrasenya d'admin (en text, per simplicitat entre amics)
 const ADMIN_PASSWORD = 'champions2627admin';
 // ============================================================
 
@@ -4207,18 +4203,6 @@ function quinielaCanviaJornada(key) {
   renderQuinielaNominated(contentDiv, partits, v(found,'Fase'), v(found,'Jornada'), jornLabel);
 }
 
-function quinielaCheckAuth() {
-  const participant = document.getElementById('qParticipant')?.value;
-  const pass = document.getElementById('qPass')?.value;
-  const errEl = document.getElementById('qError');
-  const validPass = Q_PASSWORDS[participant];
-  if (!validPass) { if(errEl) errEl.textContent = 'Participant sense contrasenya configurada.'; return; }
-  if (pass !== validPass) { if(errEl) errEl.textContent = 'Contrasenya incorrecta.'; return; }
-  _quinielaParticipant = participant;
-  _quinielaAuth = true;
-  renderQuinielaTab();
-}
-
 function renderQuinielaNominated(el, partits, fase, jorn, jornLabel) {
   const p = _quinielaParticipant;
 
@@ -5699,7 +5683,7 @@ function getJugadorEfectiu(participant, jugador, fase, jornada) {
 // ============================================================
 // CARTES UI
 // ============================================================
-const C_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwe7egYwCGNeAWMKQEW8g7ncGlg3XPIP4HMJy6f8Bp9gz7n4HmfM1713uQMLu8nxGYv/exec';
+const C_SCRIPT_URL = SCRIPT_URL; // mateixa URL que SCRIPT_URL
 const C_PASSWORDS = {
   'MBEMBA':            'siesta1999',
   'NTNP':              'ntnp1302',
