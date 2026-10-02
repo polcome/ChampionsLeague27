@@ -1323,17 +1323,28 @@ function isSuplentActiu(participant, fase, jornada) {
   return result;
 }
 
-// Retorna el primer titular el slot del qual té nota efectiva === 0
-// (pot ser el titular original o el jugador rebut per canvi que tampoc juga)
+// Retorna el titular pel qual entra el suplent: d'entre els que tenen nota
+// efectiva === 0 (titular original o jugador rebut per canvi que tampoc juga),
+// el que apareix PRIMER a la pestanya Puntuacions per a aquesta jornada.
+// Així cada participant pot triar, jornada a jornada, reordenant les seves files.
 function getTitularSubstituit(participant, fase, jornada) {
   const k = `titsub_${participant}_${fase}_${jornada}`;
   if (_cache[k] !== undefined) return _cache[k];
-  const titulars = getTitulars(participant, fase, jornada);
-  const substituit = titulars.find(pl => {
+  const puntuacions = gData?.puntuacions || [];
+  const candidats = getTitulars(participant, fase, jornada).filter(pl => {
     const sc = getScoreEfectiu(participant, v(pl,'Jugador'), fase, jornada);
     if (!sc || v(sc,'Nota') === '' || v(sc,'Nota') === null || v(sc,'Nota') === undefined) return false;
     return parseNota(v(sc,'Nota')) === 0;
   });
+  // Ordre = posició de la fila del titular a Puntuacions (o la del jugador efectiu si no en té)
+  const ordre = pl => {
+    const sc = getScore(participant, v(pl,'Jugador'), fase, jornada)
+      || getScoreEfectiu(participant, v(pl,'Jugador'), fase, jornada);
+    const idx = sc ? puntuacions.indexOf(sc) : -1;
+    return idx >= 0 ? idx : Infinity;
+  };
+  // sort és estable: en cas d'empat es manté l'ordre de la plantilla
+  const substituit = candidats.sort((a, b) => ordre(a) - ordre(b))[0];
   _cache[k] = substituit || null;
   return _cache[k];
 }
