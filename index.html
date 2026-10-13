@@ -5297,6 +5297,11 @@ async function rLoadRuleta() {
 
   // rSpinResult = capità de la jornada de selecció (la que podem canviar ara)
   rSpinResult = rCapitaSeleccio || null;
+  if (rCapitaSeleccio) {
+    const selKey = jKey(FASE_SELECCIO||FASE_ACTIVA_GLOBAL, JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL);
+    if (!_capitansMap[selKey]) _capitansMap[selKey] = {};
+    _capitansMap[selKey][norm(rParticipant)] = rCapitaSeleccio;
+  }
   if (rCapitaActiva) {
     const activeKey = jKey(FASE_ACTIVA_GLOBAL, JORNADA_ACTIVA_GLOBAL);
     if (!_capitansMap[activeKey]) _capitansMap[activeKey] = {};
@@ -5517,11 +5522,11 @@ async function rSaveCapita(jugador, rPlayers) {
   } catch(e) { console.warn('Error guardant capità:', e); }
 
   rSpinResult = jugador;
-  if (norm(faseSave)===norm(FASE_ACTIVA_GLOBAL) && norm(jornadaSave)===norm(JORNADA_ACTIVA_GLOBAL) && JORNADA_REVELADA) {
-    const activeKey = jKey(FASE_ACTIVA_GLOBAL, JORNADA_ACTIVA_GLOBAL);
-    if (!_capitansMap[activeKey]) _capitansMap[activeKey] = {};
-    _capitansMap[activeKey][norm(rParticipant)] = jugador;
-  }
+  // Guarda el capità propi a la jornada on s'ha desat (activa o de selecció),
+  // perquè la resta de l'app (p. ex. la carta Doble capità) el vegi sense recarregar
+  const saveKey = jKey(faseSave, jornadaSave);
+  if (!_capitansMap[saveKey]) _capitansMap[saveKey] = {};
+  _capitansMap[saveKey][norm(rParticipant)] = jugador;
   clearCache(); renderRanking();
   rRenderMain(rPlayers, jugador, jugador, []);
   showToast('⭐ Capità assignat: ' + jugador);
@@ -5798,6 +5803,21 @@ async function cLoadCarta() {
       let d={};try{d=JSON.parse(r[5]);}catch(e){}
       _cartesGastades[slotK][norm(r[0])]={carta:normCartaNom(r[3]),detall:d};
     });
+
+    // Capità propi de la jornada de selecció, llegit fresc del Sheet.
+    // _capitansMap pot no tenir-lo: en carregar l'app s'amaguen els capitans dels
+    // altres i, si encara no s'havia iniciat sessió, també el propi. Sense això la
+    // carta Doble capità diu "Primer tria el capità!" encara que ja s'hagi triat.
+    try {
+      const capRows = parseSheet(await fetchSheet('Capitans'));
+      const capRow = capRows.find(r => norm(v(r,'Participant'))===norm(cParticipant) &&
+        norm(v(r,'Fase'))===norm(faseSel3) && norm(v(r,'Jornada'))===norm(jorSel3) && v(r,'Capita'));
+      if (capRow) {
+        const capKey = jKey(faseSel3, jorSel3);
+        if (!_capitansMap[capKey]) _capitansMap[capKey] = {};
+        _capitansMap[capKey][norm(cParticipant)] = v(capRow,'Capita');
+      }
+    } catch(e) { console.warn('Capità propi:', e); }
 
     cRenderCartaDual(cartaActiva, cartaSeleccio, historial, isSameJ, faseSel3, jorSel3);
   } catch(e){el.innerHTML=`<div style="text-align:center;padding:2rem;color:#F87171">Error: ${e.message}</div>`;}
