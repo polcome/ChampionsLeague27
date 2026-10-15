@@ -1269,6 +1269,16 @@ function openEntrenadorCard(participant) {
 // El suplent és el jugador amb rol SUP a la jornada.
 // S'activa si algun titular té nota=0 o absent.
 // ── Punts de la Quiniela ─────────────────────────────────────────────────────
+// Etiqueta "+Xp" de la quiniela. Només quan tots els partits tenen resultat
+// (igual que getQuinielaPts); si encara en falten, mostra "pendent".
+function quinielaPtsBadge(participant, fase, jornada, partits) {
+  const completa = partits.every(r => v(r,'Resultat') && v(r,'Resultat') !== '');
+  if (!completa) return `<span style="font-size:0.7rem;color:var(--silver);opacity:0.7;white-space:nowrap">pendent</span>`;
+  const pts = getQuinielaPts(participant, fase, jornada);
+  const col = pts >= 10 ? '#4ADE80' : pts > 0 ? '#FBBF24' : 'var(--silver)';
+  return `<span style="font-family:'Space Mono',monospace;font-weight:700;color:${col};white-space:nowrap">+${pts}p</span>`;
+}
+
 function getQuinielaPts(participant, fase, jornada) {
   const k = `quiniela_${participant}_${fase}_${jornada}`;
   if (_cache[k] !== undefined) return _cache[k];
@@ -2461,9 +2471,10 @@ function _renderTeamFull() {
         quinielaCardHtml = `<div style="background:${guanya?'rgba(74,222,128,0.1)':'rgba(255,255,255,0.03)'};border:1px solid ${guanya?'rgba(74,222,128,0.4)':'var(--glass-border)'};border-radius:10px;padding:0.7rem 1rem;margin-bottom:0.8rem;display:flex;align-items:center;gap:0.8rem">
           <span style="font-size:1.3rem">${guanya?'🏆':'🎯'}</span>
           <div>
-            <div style="font-size:0.82rem;font-weight:700;color:${color}">${encerts}/${qPartits.length} encerts a la quiniela${guanya?' · +10 pts!':''}</div>
+            <div style="font-size:0.82rem;font-weight:700;color:${color}">${encerts}/${qPartits.length} encerts a la quiniela</div>
             <div style="font-size:0.72rem;color:var(--silver)">${qPartits.map((r,i)=>`${v(r,'Local')}-${v(r,'Visitant')}: <strong style="color:${sels[i]===ress[i]?'#4ADE80':'#F87171'}">${sels[i]||'—'}</strong>`).join(' · ')}</div>
           </div>
+          <div style="margin-left:auto;padding-left:0.6rem;font-size:1rem">${quinielaPtsBadge(participant, _activePhase, jornada, qPartits)}</div>
         </div>`;
       }
     }
@@ -4571,7 +4582,7 @@ function renderInfoJornadaTab() {
               if (jaTancada && s!=='—') { col = s===ress[i]?'#4ADE80':'#F87171'; suf = s===ress[i]?' ✅':' ❌'; }
               return `<td style="text-align:center;font-family:'Space Mono',monospace;font-weight:700;color:${col}">${s}${suf}</td>`;
             }).join('')}
-            ${jaTancada?`<td style="text-align:center;font-weight:700;color:${enc===qPartits.length?'#4ADE80':'var(--white)'}">${enc}/${qPartits.length}${enc===qPartits.length?' 🏆':''}</td>`:''}
+            ${jaTancada?`<td style="text-align:center;font-weight:700;color:${enc===qPartits.length?'#4ADE80':'var(--white)'}">${enc}/${qPartits.length}${enc===qPartits.length?' 🏆':''} · ${quinielaPtsBadge(pp, fase, jorn, qPartits)}</td>`:''}
           </tr>`;
         }).join('')}
         ${jaTancada ? (() => {
