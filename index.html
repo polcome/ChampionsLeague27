@@ -6101,7 +6101,8 @@ function cRenderAccio(accio) {
       }
       const cap1Data = (cAllPlayers[norm(cParticipant)]||[]).find(p=>norm(v(p,'Jugador'))===norm(cap1));
       const cap1Equip = cap1Data ? v(cap1Data,'Equip') : '';
-      const restPls = (cAllPlayers[norm(cParticipant)]||[]).filter(p=>norm(v(p,'Jugador'))!==norm(cap1));
+      // 2n capità: ni el 1r capità ni el suplent (igual que la ruleta de capità)
+      const restPls = (cAllPlayers[norm(cParticipant)]||[]).filter(p=>norm(v(p,'Jugador'))!==norm(cap1) && norm(getRolEfectiu(p,dcFaseSel,dcJornSel))!=='sup');
       const drumItems2 = [];
       for(let i=0;i<5;i++) drumItems2.push(...restPls);
       const drumHtml2 = drumItems2.map(pl=>{const foto=v(pl,'Foto');const av=foto?`<img class="d-avatar" src="${foto}" onerror="this.outerHTML='<div class=d-avatar-ph>👤</div>'">`:`<div class="d-avatar-ph">👤</div>`;return `<div class="drum-item">${av}<div><div class="d-name">${v(pl,'Jugador')}</div><div class="d-sub">${v(pl,'Equip')} · ${v(pl,'Posicio')}</div></div></div>`;}).join('');
@@ -6165,7 +6166,8 @@ function dcDoSpin() {
   const dcJornSel2 = JORNADA_SELECCIO || JORNADA_ACTIVA_GLOBAL;
   const cap1 = capitansSlot(dcFaseSel2, dcJornSel2)[norm(cParticipant)];
   const allPls = cAllPlayers[norm(cParticipant)]||[];
-  const restPls = allPls.filter(p=>norm(v(p,'Jugador'))!==norm(cap1));
+  // Mateixa llista que el tambor de cRenderAccio: ni el 1r capità ni el suplent
+  const restPls = allPls.filter(p=>norm(v(p,'Jugador'))!==norm(cap1) && norm(getRolEfectiu(p,dcFaseSel2,dcJornSel2))!=='sup');
   if (!restPls.length) return;
   _dcSpinning = true;
   const btn = document.getElementById('dc_spinBtn');
