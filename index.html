@@ -1123,6 +1123,26 @@ function getRolEfectiu(playerRow, fase, jornada) {
   return (v(playerRow, 'Rol') || '').toUpperCase().trim();
 }
 
+// Plantilla REAL d'un participant per a una jornada: els jugadors (no eliminats)
+// que tenen rol assignat a la columna Rol_<fase>_<jornada>. A diferència de
+// getRolEfectiu, NO arrossega rols de jornades anteriors (si no, un jugador que
+// ja no és a l'equip, com un original venut, seguiria apareixent).
+// Si la jornada encara no té cap rol omplert per a aquest participant, fa servir
+// l'última jornada anterior que en tingui; i si no n'hi ha cap, la plantilla
+// calculada amb Es_Original + Canvis.
+// S'usa per a les llistes de selecció: ruleta de capità i cartes.
+function getPlantillaJornada(participant, fase, jornada) {
+  const rows = filterActius((gData?.jugadors || []).filter(r => norm(v(r,'Participant')) === norm(participant)));
+  const ambRol = (f, j) => rows.filter(r => { const k = rolColKey(r, f, j); return k && v(r, k); });
+  const idx = jornadaIndex(fase, jornada);
+  for (let i = idx; i >= 0; i--) {
+    const [f, j] = ALL_JORNADES_ORDER[i].split('_');
+    const pl = ambRol(f, j);
+    if (pl.length) return pl;
+  }
+  return filterActius(getPlayersForPhase(participant, fase, jornada));
+}
+
 function getPlayersForPhase(participant, phase, jornada) {
   if (!jornada) {
     const jorns = PHASE_JORNADES[phase] || [];
@@ -5277,7 +5297,7 @@ async function rLoadRuleta() {
   // Jugadors de l'equip (de la fase/jornada de SELECCIÓ, no la activa)
   const rFaseSel = FASE_SELECCIO || FASE_ACTIVA_GLOBAL;
   const rJornSel = JORNADA_SELECCIO || JORNADA_ACTIVA_GLOBAL;
-  const rPlayers = getPlayersForPhase(rParticipant, rFaseSel, rJornSel)
+  const rPlayers = getPlantillaJornada(rParticipant, rFaseSel, rJornSel)
     .filter(pl => norm(getRolEfectiu(pl, rFaseSel, rJornSel)) !== 'sup');
 
   // Carrega capitans de les dues jornades (activa + selecció)
@@ -5477,7 +5497,7 @@ function rDoSpin() {
   if (rSpinResult) { showToast('Ja tens capità assignat per aquesta jornada!'); return; }
   const rFaseSelSpin = FASE_SELECCIO || FASE_ACTIVA_GLOBAL;
   const rJornSelSpin = JORNADA_SELECCIO || JORNADA_ACTIVA_GLOBAL;
-  const rPlayers = filterActius(getPlayersForPhase(rParticipant, rFaseSelSpin, rJornSelSpin))
+  const rPlayers = getPlantillaJornada(rParticipant, rFaseSelSpin, rJornSelSpin)
     .filter(pl => norm(getRolEfectiu(pl, rFaseSelSpin, rJornSelSpin)) !== 'sup');
   if (!rPlayers.length) return;
   rSpinning = true;
@@ -5779,11 +5799,12 @@ async function cLoadCarta() {
   const el=document.getElementById('cartesTabContent');
   if(!el)return;
   el.innerHTML='<div style="text-align:center;padding:3rem"><div class="spinner"></div></div>';
+  // Plantilla de cada participant a la jornada de SELECCIÓ (només jugadors que
+  // hi tenen rol assignat): s'usa a totes les cartes que trien jugadors
   cAllPlayers={};
-  (gData?.jugadors||[]).forEach(r=>{
-    if(norm(v(r,'Eliminat'))==='si'||norm(v(r,'Eliminat'))==='yes'||norm(v(r,'Eliminat'))==='1') return;
-    const p=norm(v(r,'Participant'));if(!cAllPlayers[p])cAllPlayers[p]=[];cAllPlayers[p].push(r);
-  });
+  const cFaseP = FASE_SELECCIO||FASE_ACTIVA_GLOBAL, cJornP = JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL;
+  const cNoms = new Set((gData?.jugadors||[]).map(r=>v(r,'Participant')).filter(Boolean));
+  cNoms.forEach(nom=>{ cAllPlayers[norm(nom)] = getPlantillaJornada(nom, cFaseP, cJornP); });
   try {
     const faseSel3 = FASE_SELECCIO||FASE_ACTIVA_GLOBAL;
     const jorSel3  = JORNADA_SELECCIO||JORNADA_ACTIVA_GLOBAL;
